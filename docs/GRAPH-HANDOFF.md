@@ -6,7 +6,7 @@
 - `indexer.py`: AST chunks; pytest IDs; absolute/relative/src imports; scoped conftest relationships.
 - `graph_store.py`: Atlas snapshot persistence/readiness and bounded `$graphLookup` with a one-edge lookahead.
 - `graph.py`: changed context, affected tests, ordered evidence, and fallback signals including `graph_truncated`.
-- `cli.py`: working `impact-agent index`; `analyze` remains Person 3's scaffold.
+- `cli.py`: working `impact-agent index` and `analyze`; see `AGENT-HANDOFF.md` for AGENT-1/2 integration.
 
 `ARCH.md` defines the authoritative fields and interfaces. This is a conservative file-level import graph, not symbol-level call analysis.
 

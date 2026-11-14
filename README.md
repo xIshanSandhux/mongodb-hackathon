@@ -1,6 +1,6 @@
 # PR Impact Agent
 
-An explainable CI agent that selects and runs regression tests for a pull request. Python indexing and graph impact tracing are implemented; test selection/execution and CI integration remain separate tickets. See [PROBLEM.md](PROBLEM.md), [REQUIREMENTS.md](REQUIREMENTS.md), and [ARCH.md](ARCH.md) for scope and shared interfaces.
+An explainable CI agent that selects and runs regression tests for a pull request. Python indexing, graph impact tracing, test selection/execution, reports, and a default Atlas retrieval/memory adapter are implemented. Live Atlas integration and the separate demo/Actions workflow remain to be verified. See [PROBLEM.md](PROBLEM.md), [REQUIREMENTS.md](REQUIREMENTS.md), and [ARCH.md](ARCH.md) for scope and shared interfaces.
 
 ## Requirements
 
@@ -69,7 +69,15 @@ impact-agent --help
 impact-agent index --repo /path/to/demo-repo --repo-id demo-python --commit <base-sha>
 ```
 
-`analyze` still exits with an implementation-pending message; Person 3 owns its integration. GRAPH-2 is available as `impact_agent.graph.analyze_graph`. See [the graph handoff](docs/GRAPH-HANDOFF.md) for usage and tests. Person 1 still owns vector index creation/search.
+Run analysis with the demo repository checked out cleanly at head:
+
+```sh
+impact-agent analyze --repo /path/to/demo-repo --repo-id demo-python --base <base-sha> --head <head-sha> --output impact-report.json --summary impact-summary.md
+```
+
+The command merges graph, semantic, and prior-failure evidence, runs selected pytest tests or the full suite, saves run memory, and writes both reports. Failed tests return a failing exit status. Missing Atlas credentials/retrieval trigger full-suite fallback; unsuccessful memory storage is a visible warning. Reports must not overwrite tracked files. The demo's own dependencies must be installed into the Python environment running the agent.
+
+The default vector index name is `autoEmbed`; set `MONGODB_VECTOR_INDEX` if your team's index has another name. Person 1 still provisions and verifies the actual index. See [the graph handoff](docs/GRAPH-HANDOFF.md) and [the agent handoff](docs/AGENT-HANDOFF.md).
 
 To run Person 1's live Atlas vector and prior-run smoke check separately, configure `MONGODB_URI` and run `python -m impact_agent.atlas`. The `index` command bootstraps the collections and vector index, but does not run this smoke check.
 

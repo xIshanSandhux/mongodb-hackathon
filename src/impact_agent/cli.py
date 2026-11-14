@@ -1,14 +1,18 @@
 """Command-line entry point for the PR Impact Agent MVP."""
 
+from contextlib import ExitStack
+import os
 from pathlib import Path
 
 import typer
 from pymongo.errors import PyMongoError
 
-from .atlas import atlas_database, create_atlas_client, setup_atlas
+from .atlas import VECTOR_INDEX, atlas_database, create_atlas_client, setup_atlas
 from .gitrepo import GitError
-from .graph_store import AtlasGraphStore
+from .graph_store import AtlasGraphStore, graph_store_from_env
 from .indexer import IndexingError, build_snapshot
+from .agent import analyze_repository
+from .retrieval import AtlasRetrievalStore
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -51,7 +55,24 @@ def analyze(
     output: Path = typer.Option(Path("impact-report.json"), help="Path for the JSON report."),
     summary: Path = typer.Option(Path("impact-summary.md"), help="Path for the Markdown summary."),
 ) -> None:
-    """Analyze a pull request and run selected tests (implementation pending)."""
-    del repo, repo_id, base, head, output, summary
-    typer.echo("The analyze command is scaffolded; see REQUIREMENTS.md tickets AGENT-1 and AGENT-2.", err=True)
-    raise typer.Exit(code=2)
+    """Select regression tests, run pytest, remember outcomes, and write reports."""
+    try:
+        with ExitStack() as stack:
+            try:
+                graph_store = stack.enter_context(graph_store_from_env())
+            except (PyMongoError, ValueError):
+                graph_store = None
+            retrieval = (AtlasRetrievalStore(
+                graph_store.knowledge,
+                os.environ.get("MONGODB_VECTOR_INDEX", VECTOR_INDEX),
+            ) if graph_store is not None else None)
+            report = analyze_repository(repo, repo_id, base, head, output, summary, graph_store, retrieval)
+    except (ValueError, OSError):
+        typer.echo("Analysis could not write its reports. Check distinct report paths, permissions, and repository files.", err=True)
+        raise typer.Exit(code=2) from None
+    typer.echo(f"Tests: {report['test_status']}; cases: {report['selected_test_count']}; "
+               f"full-suite fallback: {'yes' if report['fallback']['ran'] else 'no'}.")
+    typer.echo(f"Reports: {output} and {summary}")
+    if report["persistence"]["status"] in ("failed", "unavailable"):
+        typer.echo(report["persistence"]["warning"], err=True)
+    raise typer.Exit(code=report["exit_code"])

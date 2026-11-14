@@ -50,7 +50,11 @@ GRAPH-1/2 use the **Implemented graph contract** in `ARCH.md`. Stable `node_id` 
 
 Graph acceptance includes committed-tree reads despite dirty worktrees, import and scoped conftest relationships, ordered path evidence, and fallback signals for missing/stale snapshots, unparseable/unmapped Python, unsupported Python symlinks, Atlas errors, and paths continuing beyond the two-edge bound. The handoff is `analyze_graph(...) -> GraphImpact`. Person 3 owns vector/memory merging, final no-candidate fallback, execution, and reports. Live graph verification requires `MONGODB_TEST_URI` and is separate from local tests.
 
-### Team schedule
+### AGENT ticket integration details
+
+AGENT-1/2 use **Implemented agent contract** in `ARCH.md`. Both CLI commands are implemented. Acceptance covers evidence-preserving graph/vector/prior-failure merging; mandatory and no-candidate fallback; real pytest case counts/outcomes; JSON/Markdown on test and analysis failure; nonzero test-failure status; and saved run documents consumable by later analyses. Index provisioning is still ATLAS-1; `RetrievalStore` is the replaceable ATLAS-2 boundary. Live vector/memory verification is pending a ready team index. Missing storage is reported as a warning while preserving the test result. Input/report-path errors do not execute tests or overwrite tracked files.
+
+### Team schedule checkpoints
 
 - **At 0:20:** CLI flags, collection fields, `repo_id`, snapshot commit behavior, and report fields are agreed.
 - **By 2:30:** Atlas, graph indexing, selector/runner, and demo workflow can be exercised independently with stubs or seeded data.
