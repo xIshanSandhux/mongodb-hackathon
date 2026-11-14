@@ -3,6 +3,11 @@
 from pathlib import Path
 
 import typer
+from pymongo.errors import PyMongoError
+
+from .gitrepo import GitError
+from .graph_store import graph_store_from_env
+from .indexer import IndexingError, build_snapshot
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -16,9 +21,22 @@ def index(
     repo_id: str = typer.Option(..., help="Stable identifier for this repository in Atlas."),
     commit: str = typer.Option(..., help="Git commit SHA represented by the index."),
 ) -> None:
-    """Index a Python repository into MongoDB Atlas (implementation pending)."""
-    typer.echo("The index command is scaffolded; see REQUIREMENTS.md ticket GRAPH-1.", err=True)
-    raise typer.Exit(code=2)
+    """Index committed Python source, pytest tests, and dependency edges into Atlas."""
+    try:
+        snapshot = build_snapshot(repo, repo_id, commit)
+        with graph_store_from_env() as store:
+            store.save_snapshot(snapshot)
+    except (GitError, IndexingError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from None
+    except PyMongoError:
+        typer.echo("Atlas indexing failed. Check connectivity, credentials, and database permissions.", err=True)
+        raise typer.Exit(code=2) from None
+    except ValueError:
+        typer.echo("Check MONGODB_URI and MONGODB_DATABASE in the environment or local .env file.", err=True)
+        raise typer.Exit(code=2) from None
+    typer.echo(f"Indexed {len(snapshot.nodes)} nodes and {len(snapshot.edges)} edges "
+               f"for {repo_id} at {snapshot.base_sha}.")
 
 
 @app.command()

@@ -13,7 +13,7 @@ For a pull request in one Python demo repository, produce an explainable regress
 | FR-01 | Index one Python repository into Atlas. | `impact-agent index` at a commit stores source chunks, pytest test chunks, Python import edges, and test relationships. An Atlas vector query returns matching indexed content. |
 | FR-02 | Identify changes for a PR. | `impact-agent analyze` accepts a repository path and base/head SHAs and reports the changed paths from that diff. |
 | FR-03 | Select relevant tests using Atlas graph and vector search, plus prior-run memory. | A graph-linked change includes its dependent test; a test not found through the graph can be added by vector retrieval; a similar stored run can contribute a historically failing test. Every chosen test has a recorded reason. |
-| FR-04 | Fall back when impact is uncertain. | Missing/stale base index, changed Python that cannot be parsed or mapped, Atlas retrieval failure, or zero defensible candidates causes the full pytest suite to run. The report states the fallback reason. |
+| FR-04 | Fall back when impact is uncertain. | Missing/stale base index, changed Python that cannot be parsed or mapped, Atlas retrieval failure, graph traversal beyond its two-edge selection bound, or zero defensible candidates causes the full pytest suite to run. The report states the fallback reason. |
 | FR-05 | Execute tests and report results. | The CLI writes JSON and Markdown with SHAs, changed paths, tests, reasons, outcomes, duration, and fallback details, including on test failure. Test failure produces a nonzero CLI exit status. |
 | FR-06 | Remember outcomes across PRs. | Each analysis stores its changed-path summary, selected tests, and outcomes in Atlas; a later similar analysis can retrieve the run. |
 | FR-07 | Run from GitHub Actions. | A workflow in the separate demo repo supports `pull_request` and manual dispatch, passes the base/head SHAs and Atlas secret, always publishes the report in the Actions job summary, and fails the check when tests fail. |
@@ -43,6 +43,14 @@ Replace Person 1–4 with teammate names at kickoff. First agree on the CLI flag
 | DEMO-1 | Person 4 | CI-1 plus integrated AGENT-2 | Add replayable changes and tests that show graph selection, semantic or memory retrieval, and fallback; run the Action end to end and record selected/full counts and timings. |
 
 ## Integration checkpoints
+
+### GRAPH ticket integration details
+
+GRAPH-1/2 use the **Implemented graph contract** in `ARCH.md`. Stable `node_id` differs from snapshot `_id`. The completion marker uses existing `kind=code`, `node_type=snapshot` and must be excluded from code vector results. Candidate selection is limited to two edges; MongoDB's zero-based `maxDepth=2` fetches one additional edge to signal `graph_truncated` and require full-suite fallback.
+
+Graph acceptance includes committed-tree reads despite dirty worktrees, import and scoped conftest relationships, ordered path evidence, and fallback signals for missing/stale snapshots, unparseable/unmapped Python, unsupported Python symlinks, Atlas errors, and paths continuing beyond the two-edge bound. The handoff is `analyze_graph(...) -> GraphImpact`. Person 3 owns vector/memory merging, final no-candidate fallback, execution, and reports. Live graph verification requires `MONGODB_TEST_URI` and is separate from local tests.
+
+### Team schedule
 
 - **At 0:20:** CLI flags, collection fields, `repo_id`, snapshot commit behavior, and report fields are agreed.
 - **By 2:30:** Atlas, graph indexing, selector/runner, and demo workflow can be exercised independently with stubs or seeded data.
