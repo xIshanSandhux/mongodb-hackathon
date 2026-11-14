@@ -2,7 +2,7 @@
 
 ## Run the completed CLI
 
-Install the agent and the demo repository's dependencies into the same Python environment. Configure `MONGODB_URI`, optional `MONGODB_DATABASE` (default `pr_impact`), and optional `MONGODB_VECTOR_INDEX` (default `autoEmbed`) in environment variables or `.env` in your working directory.
+Install the agent and the demo repository's dependencies into the same Python environment. Configure `MONGODB_URI`, optional `MONGODB_DATABASE` (default `pr_impact`), and optional `MONGODB_VECTOR_INDEX` (default `knowledge_vector`) in environment variables or `.env` in your working directory.
 
 Index the exact base commit, then analyze with the demo checked out at head:
 
