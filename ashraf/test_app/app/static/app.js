@@ -16,12 +16,14 @@ async function refresh() {
     if (!filtered.ok || !all.ok) throw new Error('Could not load payments');
     const data = await filtered.json();
     allPayments = (await all.json()).payments;
-    await summary.json();
+    const metrics = await summary.json();
     rows.innerHTML = data.payments.length ? data.payments.map(paymentRow).join('') : '<tr><td colspan="6" class="empty">No payments match this filter.</td></tr>';
     document.querySelector('#volume').textContent = money(allPayments.filter(p => p.status === 'succeeded').reduce((sum, p) => sum + p.amount, 0));
     document.querySelector('#transaction-count').textContent = allPayments.length;
     document.querySelector('#success-count').textContent = allPayments.filter(p => p.status === 'succeeded').length;
     document.querySelector('#attention-count').textContent = allPayments.filter(p => ['processing','failed'].includes(p.status)).length;
+    document.querySelector('#settlement-count').textContent = metrics.settlements ?? 0;
+    document.querySelector('#dispute-count').textContent = metrics.disputes ?? 0;
     document.querySelector('#result-count').textContent = `${data.count} payment${data.count === 1 ? '' : 's'}`;
   } catch (error) {
     rows.innerHTML = `<tr><td colspan="6" class="empty">${safe(error.message)}. Refresh to try again.</td></tr>`;

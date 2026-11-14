@@ -26,6 +26,8 @@
       <article class="stat-card"><div class="stat-top">Transactions <span class="stat-icon blue">▤</span></div><strong id="transaction-count">0</strong><small>All payment attempts</small></article>
       <article class="stat-card"><div class="stat-top">Successful <span class="stat-icon green">✓</span></div><strong id="success-count">0</strong><small>Ready to be refunded</small></article>
       <article class="stat-card"><div class="stat-top">Needs attention <span class="stat-icon orange">!</span></div><strong id="attention-count">0</strong><small>Processing or failed</small></article>
+      <article class="stat-card"><div class="stat-top">Settlement batches <span class="stat-icon blue">⇄</span></div><strong id="settlement-count">0</strong><small>Queued for vendor payout</small></article>
+      <article class="stat-card"><div class="stat-top">Disputes <span class="stat-icon orange">⚑</span></div><strong id="dispute-count">0</strong><small>Cases under review</small></article>
     </section>
 
     <section class="panel"><div class="panel-heading"><div><h2>Recent payments</h2><p>A live view of your latest payment activity.</p></div><label class="filter-wrap"><span>☷</span><select id="status-filter" aria-label="Filter by status"><option value="">All statuses</option><option value="succeeded">Succeeded</option><option value="processing">Processing</option><option value="failed">Failed</option><option value="refunded">Refunded</option></select></label></div>
@@ -38,7 +40,7 @@
   <dialog id="payment-modal"><form id="payment-form"><div class="modal-head"><div><p class="eyebrow">NEW TRANSACTION</p><h2>Create payment</h2></div><button type="button" class="close" id="close-modal" aria-label="Close">×</button></div>
     <p class="form-intro">Create a simulated payment. No real card is charged.</p>
     <label>Order ID<input name="order_id" required minlength="3" placeholder="ord_1050"></label>
-    <div class="form-row"><label>Customer name<input name="customer_name" required minlength="2" maxlength="100" placeholder="Jordan Lee"></label><label>Email address<input name="customer_email" type="email" required placeholder="jordan@example.test"></label></div>
+    <div class="form-row"><label>Customer name<input name="customer_name" required minlength="2" maxlength="100" placeholder="Jordan Lee"></label><label>Email address<input name="customer_email" type="email" required placeholder="jordan@example.com"></label></div>
     <div class="form-row"><label>Vendor<select name="vendor" required><option>Northstar Goods</option><option>Morrow Home</option><option>Juniper Supply</option><option>Acme Store</option></select></label><label>Customer phone <span class="optional">(optional)</span><input name="customer_phone" type="tel" placeholder="+1 416 555 0123"></label></div>
     <div class="form-row"><label>Amount<input name="amount" type="number" min="0.01" step="0.01" required placeholder="49.00"></label><label>Currency<select name="currency"><option>USD</option><option>CAD</option><option>EUR</option></select></label></div>
     <label>Description <span class="optional">(optional)</span><input name="description" maxlength="240" placeholder="Order payment"></label>

@@ -11,50 +11,35 @@ services:
       LEDGER_URL: http://ledger:8105
       NOTIFICATIONS_URL: http://notifications:8106
       REPORTING_URL: http://reporting:8107
-    depends_on:
-      payments: { condition: service_healthy }
-      customers: { condition: service_healthy }
-      vendors: { condition: service_healthy }
-      risk: { condition: service_healthy }
-      ledger: { condition: service_healthy }
-      notifications: { condition: service_healthy }
-      reporting: { condition: service_healthy }
-  payments:
-    build: .
-    command: uvicorn app.services.payments.main:app --host 0.0.0.0 --port 8101
-    expose: ["8101"]
-    healthcheck: { test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8101/health')"], interval: 5s, timeout: 2s, retries: 10 }
-  customers:
-    build: .
-    command: uvicorn app.services.customers.main:app --host 0.0.0.0 --port 8102
-    expose: ["8102"]
-    healthcheck: { test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8102/health')"], interval: 5s, timeout: 2s, retries: 10 }
-  vendors:
-    build: .
-    command: uvicorn app.services.vendors.main:app --host 0.0.0.0 --port 8103
-    expose: ["8103"]
-    healthcheck: { test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8103/health')"], interval: 5s, timeout: 2s, retries: 10 }
+      FX_URL: http://fx:8108
+      FRAUD_URL: http://fraud:8109
+      IDEMPOTENCY_URL: http://idempotency:8110
+      SETTLEMENT_URL: http://settlement:8111
+      DISPUTES_URL: http://disputes:8112
+      WEBHOOKS_URL: http://webhooks:8113
+      AUDIT_URL: http://audit:8114
+    depends_on: [payments, customers, vendors, risk, ledger, notifications, reporting, fx, fraud, idempotency, settlement, disputes, webhooks, audit]
+  payments: { build: ., command: uvicorn app.services.payments.main:app --host 0.0.0.0 --port 8101, expose: ["8101"] }
+  customers: { build: ., command: uvicorn app.services.customers.main:app --host 0.0.0.0 --port 8102, expose: ["8102"] }
+  vendors: { build: ., command: uvicorn app.services.vendors.main:app --host 0.0.0.0 --port 8103, expose: ["8103"] }
   risk:
     build: .
     command: uvicorn app.services.risk.main:app --host 0.0.0.0 --port 8104
     expose: ["8104"]
-    environment:
-      VENDORS_URL: http://vendors:8103
-    healthcheck: { test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8104/health')"], interval: 5s, timeout: 2s, retries: 10 }
+    environment: { VENDORS_URL: http://vendors:8103 }
+    depends_on: [vendors]
   ledger:
     build: .
     command: uvicorn app.services.ledger.main:app --host 0.0.0.0 --port 8105
     expose: ["8105"]
-    environment:
-      PAYMENTS_URL: http://payments:8101
-    healthcheck: { test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8105/health')"], interval: 5s, timeout: 2s, retries: 10 }
+    environment: { PAYMENTS_URL: http://payments:8101 }
+    depends_on: [payments]
   notifications:
     build: .
     command: uvicorn app.services.notifications.main:app --host 0.0.0.0 --port 8106
     expose: ["8106"]
-    environment:
-      CUSTOMERS_URL: http://customers:8102
-    healthcheck: { test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8106/health')"], interval: 5s, timeout: 2s, retries: 10 }
+    environment: { CUSTOMERS_URL: http://customers:8102 }
+    depends_on: [customers]
   reporting:
     build: .
     command: uvicorn app.services.reporting.main:app --host 0.0.0.0 --port 8107
@@ -63,6 +48,33 @@ services:
       PAYMENTS_URL: http://payments:8101
       LEDGER_URL: http://ledger:8105
       NOTIFICATIONS_URL: http://notifications:8106
-    depends_on:
-      payments: { condition: service_healthy }
-    healthcheck: { test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8107/health')"], interval: 5s, timeout: 2s, retries: 10 }
+      SETTLEMENT_URL: http://settlement:8111
+      DISPUTES_URL: http://disputes:8112
+    depends_on: [payments, ledger, notifications, settlement, disputes]
+  fx: { build: ., command: uvicorn app.services.fx.main:app --host 0.0.0.0 --port 8108, expose: ["8108"] }
+  fraud:
+    build: .
+    command: uvicorn app.services.fraud.main:app --host 0.0.0.0 --port 8109
+    expose: ["8109"]
+    environment: { VENDORS_URL: http://vendors:8103 }
+    depends_on: [vendors]
+  idempotency: { build: ., command: uvicorn app.services.idempotency.main:app --host 0.0.0.0 --port 8110, expose: ["8110"] }
+  settlement:
+    build: .
+    command: uvicorn app.services.settlement.main:app --host 0.0.0.0 --port 8111
+    expose: ["8111"]
+    environment: { PAYMENTS_URL: http://payments:8101, LEDGER_URL: http://ledger:8105 }
+    depends_on: [payments, ledger]
+  disputes:
+    build: .
+    command: uvicorn app.services.disputes.main:app --host 0.0.0.0 --port 8112
+    expose: ["8112"]
+    environment: { PAYMENTS_URL: http://payments:8101, LEDGER_URL: http://ledger:8105 }
+    depends_on: [payments, ledger]
+  webhooks:
+    build: .
+    command: uvicorn app.services.webhooks.main:app --host 0.0.0.0 --port 8113
+    expose: ["8113"]
+    environment: { VENDORS_URL: http://vendors:8103 }
+    depends_on: [vendors]
+  audit: { build: ., command: uvicorn app.services.audit.main:app --host 0.0.0.0 --port 8114, expose: ["8114"] }

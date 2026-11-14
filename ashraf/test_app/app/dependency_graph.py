@@ -1,32 +1,41 @@
-"""Runtime service-call graph used for impact-analysis examples and health tooling.
+"""Impact graph oriented from changed dependency to its dependent consumers.
 
-Edges point from a caller to the service it invokes. The impact agent should run
-tests for the changed service, then follow these outgoing edges for downstream
-integration coverage.
+Following outgoing edges finds services and integration tests that may be
+affected by a change in the source service.
 """
 
-SERVICE_CALLS = {
-    "gateway": {"customers", "vendors", "risk", "payments", "ledger", "notifications", "reporting"},
-    "customers": set(),
-    "vendors": set(),
-    "risk": {"vendors"},
-    "payments": set(),
-    "ledger": {"payments"},
-    "notifications": {"customers"},
-    "reporting": {"payments", "ledger", "notifications"},
+SERVICE_DEPENDENTS = {
+    "gateway": set(),
+    "customers": {"gateway", "notifications"},
+    "vendors": {"gateway", "risk", "fraud", "webhooks"},
+    "fx": {"gateway"},
+    "fraud": {"gateway"},
+    "risk": {"gateway"},
+    "idempotency": {"gateway"},
+    "payments": {"gateway", "ledger", "settlement", "disputes", "reporting"},
+    "ledger": {"gateway", "settlement", "disputes", "reporting"},
+    "settlement": {"gateway", "reporting"},
+    "disputes": {"gateway", "reporting"},
+    "notifications": {"gateway", "reporting"},
+    "webhooks": {"gateway"},
+    "audit": {"gateway"},
+    "reporting": {"gateway"},
 }
+
+# Retain the prior exported name for callers, but document its impact direction.
+SERVICE_CALLS = SERVICE_DEPENDENTS
 
 
 def downstream_services(service: str) -> set[str]:
-    """Return the transitive set of services called by `service`."""
-    if service not in SERVICE_CALLS:
+    """Return all transitive consumers affected by changing `service`."""
+    if service not in SERVICE_DEPENDENTS:
         raise KeyError(f"Unknown service: {service}")
     discovered: set[str] = set()
-    pending = list(SERVICE_CALLS[service])
+    pending = list(SERVICE_DEPENDENTS[service])
     while pending:
         current = pending.pop()
         if current in discovered:
             continue
         discovered.add(current)
-        pending.extend(SERVICE_CALLS[current] - discovered)
+        pending.extend(SERVICE_DEPENDENTS[current] - discovered)
     return discovered

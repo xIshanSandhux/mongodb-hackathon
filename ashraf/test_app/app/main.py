@@ -4,14 +4,16 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from decimal import Decimal
+from hashlib import sha256
 from pathlib import Path
+from uuid import uuid4
 
 import httpx
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
-from app.dependency_graph import SERVICE_CALLS
+from app.dependency_graph import SERVICE_DEPENDENTS
 
 WEB_DIR = Path(__file__).parent / "static"
 URLS = {
@@ -22,6 +24,13 @@ URLS = {
     "ledger": os.getenv("LEDGER_URL", "http://127.0.0.1:8105"),
     "notifications": os.getenv("NOTIFICATIONS_URL", "http://127.0.0.1:8106"),
     "reporting": os.getenv("REPORTING_URL", "http://127.0.0.1:8107"),
+    "fx": os.getenv("FX_URL", "http://127.0.0.1:8108"),
+    "fraud": os.getenv("FRAUD_URL", "http://127.0.0.1:8109"),
+    "idempotency": os.getenv("IDEMPOTENCY_URL", "http://127.0.0.1:8110"),
+    "settlement": os.getenv("SETTLEMENT_URL", "http://127.0.0.1:8111"),
+    "disputes": os.getenv("DISPUTES_URL", "http://127.0.0.1:8112"),
+    "webhooks": os.getenv("WEBHOOKS_URL", "http://127.0.0.1:8113"),
+    "audit": os.getenv("AUDIT_URL", "http://127.0.0.1:8114"),
 }
 
 
@@ -52,6 +61,7 @@ class PaymentRequest(BaseModel):
     card_exp_month: int | None = Field(default=None, ge=1, le=12)
     card_exp_year: int | None = Field(default=None, ge=2026, le=2045)
     card_cvc: str | None = None
+    idempotency_key: str | None = Field(default=None, min_length=8, max_length=120)
 
     @field_validator("amount")
     @classmethod
@@ -127,7 +137,7 @@ async def health():
 
 @app.get("/api/dependencies")
 def service_dependencies():
-    return {"dependencies": {name: sorted(targets) for name, targets in SERVICE_CALLS.items()}}
+    return {"dependents": {name: sorted(targets) for name, targets in SERVICE_DEPENDENTS.items()}}
 
 
 @app.get("/api/payments")
@@ -145,18 +155,35 @@ async def get_payment(payment_id: str):
 @app.post("/api/payments", status_code=201)
 async def create_payment(request: PaymentRequest):
     payload = request.model_dump(mode="json")
+    payload["idempotency_key"] = payload["idempotency_key"] or "idem_" + uuid4().hex
+    fingerprint_data = {key:value for key,value in payload.items() if key not in {"card_number","card_cvc","idempotency_key"}}
+    fingerprint = sha256(repr(sorted(fingerprint_data.items())).encode()).hexdigest()
+    reservation = await call("idempotency", "POST", "/idempotency/reserve", json={"key":payload["idempotency_key"], "request_fingerprint":fingerprint})
+    if reservation.get("replayed") and reservation.get("payment_id"):
+        return await call("payments", "GET", f"/payments/{reservation['payment_id']}")
     # Orchestrate validations across bounded services before creating the payment.
     customer = await call("customers", "POST", "/customers/verify", json={
         "name": payload["customer_name"], "email": payload["customer_email"], "phone": payload["customer_phone"]})
     vendor = await call("vendors", "GET", "/vendors/resolve", params={"name": payload["vendor"]})
+    fx = await call("fx", "GET", "/fx/quote", params={"amount":float(payload["amount"]), "currency":payload["currency"]})
+    fraud = await call("fraud", "POST", "/fraud/screen", json={"amount":float(payload["amount"]), "currency":payload["currency"],
+        "customer_email":payload["customer_email"], "card_last4":(payload["card_number"] or "")[-4:] or None, "vendor_id":vendor["id"]})
     risk = await call("risk", "POST", "/risk/authorize", json={
         "amount": float(payload["amount"]), "currency": payload["currency"], "card_number": payload["card_number"], "vendor_id": vendor["id"]})
-    payload.update(customer_id=customer["customer_id"], vendor_id=vendor["id"], risk_decision=risk["decision"])
+    payload.update(customer_id=customer["customer_id"], vendor_id=vendor["id"], risk_decision=risk["decision"],
+                   fraud_decision=fraud["decision"], fraud_score=fraud["score"], fx_quote=fx)
     payment = await call("payments", "POST", "/payments", json=payload)
     await call("ledger", "POST", "/ledger/entries", json={"payment_id": payment["id"], "amount": payment["amount"],
         "currency": payment["currency"], "type": "charge", "status": payment["status"]})
     await call("notifications", "POST", "/notifications", json={"payment_id": payment["id"],
         "customer_email": payment["customer_email"], "event": "payment." + payment["status"]})
+    if payment["status"] == "succeeded":
+        await call("settlement", "POST", "/settlements", json={"payment_id":payment["id"],"amount":fx["settlement_amount"],
+            "currency":fx["settlement_currency"],"vendor_id":vendor["id"],"status":"pending"})
+    await call("webhooks", "POST", "/webhooks/deliver", json={"event":"payment."+payment["status"],"resource_id":payment["id"],"vendor_id":vendor["id"]})
+    await call("audit", "POST", "/audit/events", json={"action":"payment.created","resource_type":"payment","resource_id":payment["id"],
+        "details":{"vendor_id":vendor["id"],"risk":risk["decision"],"fraud":fraud["decision"]}})
+    await call("idempotency", "POST", f"/idempotency/{payload['idempotency_key']}/complete", json={"payment_id":payment["id"]})
     return payment
 
 
@@ -198,3 +225,16 @@ async def dashboard_summary():
 @app.get("/api/ledger")
 async def ledger(payment_id: str | None = None):
     return await call("ledger", "GET", "/ledger/entries", params={"payment_id": payment_id} if payment_id else {})
+
+
+@app.get("/api/disputes")
+async def disputes(payment_id: str | None = None):
+    return await call("disputes", "GET", "/disputes", params={"payment_id":payment_id} if payment_id else {})
+
+
+@app.post("/api/disputes", status_code=201)
+async def open_dispute(payload: dict):
+    dispute = await call("disputes", "POST", "/disputes", json=payload)
+    await call("audit", "POST", "/audit/events", json={"action":"dispute.opened","resource_type":"dispute","resource_id":dispute["id"]})
+    await call("webhooks", "POST", "/webhooks/deliver", json={"event":"dispute.opened","resource_id":dispute["id"],"vendor_id":payload.get("vendor_id","ven_acme")})
+    return dispute

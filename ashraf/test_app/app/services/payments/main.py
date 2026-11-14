@@ -42,7 +42,7 @@ def get_payment(payment_id: str):
 @app.post("/payments", status_code=201)
 def create_payment(payload: dict):
     timestamp=now(); digits=payload.get("card_number") or ""
-    status="failed" if payload.get("risk_decision") == "declined" else ("processing" if payload["capture_method"] == "manual" else "succeeded")
+    status="failed" if payload.get("risk_decision") == "declined" else ("processing" if payload.get("fraud_decision") == "review" or payload["capture_method"] == "manual" else "succeeded")
     brand="Visa" if digits.startswith("4") else "Amex" if digits.startswith(("34","37")) else "Mastercard" if digits.startswith(("51","52","53","54","55")) else "Discover" if digits.startswith(("6011","65")) else "Unknown" if digits else None
     item={"id":"pay_"+uuid4().hex[:12],"order_id":payload["order_id"],"customer_id":payload.get("customer_id"),
         "customer_name":payload["customer_name"],"customer_email":payload["customer_email"],"customer_phone":payload.get("customer_phone"),
@@ -51,6 +51,9 @@ def create_payment(payload: dict):
         "capture_method":payload["capture_method"],"card_brand":brand,"card_last4":digits[-4:] if digits else None,
         "card_exp_month":payload.get("card_exp_month"),"card_exp_year":payload.get("card_exp_year"),
         "refunded_amount":0,"refund_reason":None,"failure_code":"generic_decline" if status=="failed" else None,
+        "fraud_decision":payload.get("fraud_decision"), "fraud_score":payload.get("fraud_score"),
+        "review_reason":"fraud_review" if payload.get("fraud_decision") == "review" else None,
+        "fx_quote":payload.get("fx_quote"), "idempotency_key":payload.get("idempotency_key"),
         "created_at":timestamp,"updated_at":timestamp,"refunded_at":None}
     # PAN and CVC are deliberately absent from the stored payment document.
     data[item["id"]]=item
