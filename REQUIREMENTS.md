@@ -29,7 +29,7 @@ For a pull request in one Python demo repository, produce an explainable regress
 
 ## Approved dashboard and explanation extension
 
-- Local-only dark Streamlit dashboard, using the existing CLI. Support prepared real-Git demo scenarios and advanced repository/base/head inputs; do not modify an existing repository's checkout.
+- Local-only Streamlit UI named TestEcho, using MongoDB green/navy colors and visible Powered by MongoDB attribution. Use short Setup → Knowledge → Run → Results pages with automatic advancement after successful actions; put explanations, evidence, timing, and reports on separate routes with bounded detail panels. Support prepared real-Git demo scenarios and local repository/base/head inputs; do not modify an existing repository's checkout.
 - Lead with pass/fail counts, selected/full case counts, and measured time savings. Without a successful same-head full-suite benchmark, show time savings as unavailable. Negative savings must remain visible.
 - Automatically generate Simple and Developer explanations in one Gemini request after each completed analysis. Simple is the default and uses judge-friendly language. Developer mode explains changed paths, graph evidence, similarity scores, prior regressions, and fallback reasons.
 - Gemini may receive bounded report evidence, relevant committed Python snippets, and failure logs, with known credentials redacted. It cannot select tests, change results, or claim hidden internal reasoning. Display recorded evidence separately as authoritative.

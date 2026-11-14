@@ -1,7 +1,8 @@
-"""Single-page local dashboard over the agent's deterministic CLI."""
+"""TestEcho: compact Streamlit pages over the deterministic agent CLI."""
 
 import json
 import os
+from functools import partial
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -11,139 +12,295 @@ from .dashboard_service import SCENARIOS, analyze_local, benchmark_full_suite, d
 from .explanations import explain_report
 
 
-def main():
-    load_dotenv(Path.cwd() / ".env", override=False)
-    st.set_page_config(page_title="PR Impact Agent", page_icon="◈", layout="wide")
-    st.markdown("""<style>
-    .block-container {max-width:1250px;padding-top:2.6rem}
-    div[data-testid="stMetric"] {background:#141d32;border:1px solid #26334d;border-radius:12px;padding:18px}
-    h1 {letter-spacing:-1.5px} div[data-testid="stCaptionContainer"] {color:#9eacc4}
-    </style>""", unsafe_allow_html=True)
-    st.caption("◈  PR IMPACT AGENT  /  LOCAL WORKSPACE")
-    st.title("Know what your change could break.")
-    st.write("Relevant tests. Recorded evidence. A clear explanation for everyone.")
-    with st.sidebar:
-        st.title("Your workspace")
-        mode = st.radio("Repository", ["Prepared demo", "Local repository"], key="repository_mode")
-        st.divider()
-        st.caption("CONNECTED SERVICES")
-        st.write("Atlas: " + ("credentials configured" if os.environ.get("MONGODB_URI") else "not configured"))
-        st.write("Gemini: " + ("key configured" if os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") else "template explanations"))
-        st.caption("Configuration status does not verify a live connection.")
-        st.caption("Set credentials in your local .env. They are never entered into a report.")
+def _go(page):
+    st.switch_page(st.session_state["pages"][page])
 
+
+def _back():
+    if st.button("← Results", key="back_results"):
+        _go("Results")
+
+
+def _config():
+    return st.session_state["configuration"]
+
+
+def _context(config):
+    return tuple(config[k].strip() for k in ("repo_path", "repo_id", "base", "head"))
+
+
+def _ready():
+    return all(_context(_config()))
+
+
+def _set_config(config):
+    st.session_state["configuration"] = config
+    for key in ("result", "explanation", "baseline", "summary", "action_log", "knowledge_notice"):
+        st.session_state.pop(key, None)
+
+
+def _require_config():
+    if _ready():
+        return True
+    st.info("Choose a repository and change first.")
+    if st.button("Choose a change", key="need_setup"):
+        _go("Setup")
+    return False
+
+
+def _require_report():
+    report = st.session_state.get("result")
+    if report:
+        if st.session_state.get("result_context") != _context(_config()):
+            st.warning("These results belong to the previous change. Run the current change to update them.")
+        return report
+    st.info("Run a change to see its results.")
+    if st.button("Continue to run", key="need_run"):
+        _go("Run" if _ready() else "Setup")
+    return None
+
+
+def _change_card():
+    config = _config()
+    with st.container(border=True):
+        st.write("**" + config.get("label", "Local change") + "**")
+        st.caption(f"{Path(config['repo_path']).name} · {config['base'][:10]} → {config['head'][:10]}")
+
+
+def _setup():
+    st.header("Choose a change.")
+    st.caption("Start with a prepared demo, or use your own local checkout.")
+    mode = st.radio("Repository", ["Prepared demo", "Local repository"], horizontal=True, key="repository_mode")
     if mode == "Prepared demo":
-        left, right = st.columns([3, 1])
-        scenario = left.selectbox("Demo scenario", SCENARIOS)
-        right.write("")
-        if right.button("Prepare demo", key="prepare", use_container_width=True):
+        scenario = st.selectbox("Demo scenario", SCENARIOS)
+        descriptions = {
+            "Focused change": "A pricing change that preserves behavior. See which checks TestEcho chooses.",
+            "Regression": "A pricing bug with a real failing test. Watch the failure appear in the report.",
+            "Unmapped file fallback": "A new Python file with no base mapping. TestEcho should run the whole suite.",
+        }
+        st.info(descriptions[scenario])
+        if st.button("Prepare & continue →", key="prepare", type="primary", use_container_width=True):
             try:
                 with st.spinner("Preparing a separate demo repository…"):
                     demo = prepare_demo(scenario)
-                st.session_state.update(repo_path=str(demo.repo), repo_id=demo.repo_id, base=demo.base, head=demo.head)
-                st.session_state["prepared_scenario"] = scenario
-                for key in ("result", "explanation", "baseline", "summary", "action_log"):
-                    st.session_state.pop(key, None)
-                st.success("Demo prepared. Index its base with Atlas, or run now to see full-suite fallback.")
-            except Exception:
+                _set_config({"repo_path": str(demo.repo), "repo_id": demo.repo_id,
+                             "base": demo.base, "head": demo.head, "label": scenario})
+                _go("Knowledge")
+            except (ValueError, OSError):
                 st.error("Could not prepare the demo. Check Git and temporary-directory access.")
-        st.caption("Focused change preserves behavior. Regression introduces a real failing test. Unmapped file demonstrates conservative fallback.")
-        if st.session_state.get("prepared_scenario") and st.session_state["prepared_scenario"] != scenario:
-            st.info("Click Prepare demo to switch scenarios. The current repository and results still belong to "
-                    + st.session_state["prepared_scenario"] + ".")
+        if _ready() and st.button("Continue with configured change →", key="continue_configured", use_container_width=True):
+            _go("Knowledge")
+    else:
+        config = _config()
+        with st.form("local_repository"):
+            repo_path = st.text_input("Repository path", value=config["repo_path"])
+            repo_id = st.text_input("Repository ID", value=config["repo_id"])
+            left, right = st.columns(2)
+            base = left.text_input("Base commit", value=config["base"])
+            head = right.text_input("Head commit", value=config["head"])
+            submitted = st.form_submit_button("Continue →", type="primary", use_container_width=True)
+        if submitted:
+            if not all(value.strip() for value in (repo_path, repo_id, base, head)):
+                st.error("Fill in the repository and both commits.")
+            else:
+                _set_config({"repo_path": repo_path.strip(), "repo_id": repo_id.strip(),
+                             "base": base.strip(), "head": head.strip(), "label": "Local change"})
+                _go("Knowledge")
 
-    with st.expander("Repository and commit settings", expanded=mode == "Local repository"):
-        st.text_input("Repository path", key="repo_path", value=os.environ.get("IMPACT_DEMO_REPO", ""))
-        st.text_input("Repository ID", key="repo_id", value=os.environ.get("REPO_ID", "demo-python"))
-        c1, c2 = st.columns(2)
-        c1.text_input("Base commit", key="base", value=os.environ.get("IMPACT_DEMO_BASE", "HEAD^"))
-        c2.text_input("Head commit", key="head", value=os.environ.get("IMPACT_DEMO_HEAD", "HEAD"))
-        st.caption("The repository must already be checked out cleanly at the head commit. The app does not change your checkout.")
-    repo_text = st.session_state.get("repo_path", "").strip()
-    repo_id = st.session_state.get("repo_id", "").strip()
-    base, head = st.session_state.get("base", "").strip(), st.session_state.get("head", "").strip()
-    ready = bool(repo_text and repo_id and base and head)
-    context = (repo_text, repo_id, base, head)
-    a, b, c = st.columns([1, 1.3, 1.5])
-    index_clicked = a.button("1 · Index base", key="index", disabled=not ready, use_container_width=True)
-    analyze_clicked = b.button("2 · Run analysis", key="analyze", type="primary", disabled=not ready, use_container_width=True)
-    benchmark_clicked = c.button("Measure full-suite baseline", key="benchmark", disabled=not ready, use_container_width=True)
-    if index_clicked:
+
+def _knowledge():
+    st.header("Give the change context.")
+    if not _require_config():
+        return
+    _change_card()
+    st.write("Atlas stores the code and test relationships that help TestEcho choose relevant checks.")
+    st.caption("Already indexed this base? Continue with existing knowledge. Missing or unavailable knowledge triggers the full suite.")
+    config = _config()
+    if st.button("Index base in Atlas →", key="index", type="primary", use_container_width=True):
         try:
-            with st.spinner("Indexing committed code and tests in Atlas…"):
-                message = index_local(Path(repo_text), repo_id, base)
-            st.success(message)
-            st.info("Atlas embeddings may still be building. Analysis will fall back if retrieval is not ready.")
+            with st.spinner("Building the committed code and test map…"):
+                index_local(Path(config["repo_path"]), config["repo_id"], config["base"])
+            st.session_state["knowledge_notice"] = "Base snapshot indexed. Search embeddings may still be building."
+            _go("Run")
         except (RuntimeError, OSError) as exc:
             st.error(str(exc))
-    if analyze_clicked:
-        try:
-            with st.spinner("Analyzing the change and running tests…"):
-                report, summary, log = analyze_local(Path(repo_text), repo_id, base, head)
-            st.session_state.update(result=report, summary=summary, action_log=log, result_context=context)
-            with st.spinner("Writing the simple and developer explanations…"):
-                st.session_state["explanation"] = explain_report(report, Path(repo_text))
-        except (RuntimeError, ValueError, OSError) as exc:
-            st.error(str(exc))
-    if benchmark_clicked:
-        try:
-            with st.spinner("Running the full suite to measure a real baseline…"):
-                baseline = benchmark_full_suite(Path(repo_text), repo_id, head)
-            st.session_state["baseline"] = baseline
-            st.success(f"Full-suite benchmark: {baseline['duration_seconds']:.2f}s, exit {baseline['exit_code']}.")
-        except (RuntimeError, ValueError, OSError) as exc:
-            st.error(str(exc))
-    report = st.session_state.get("result")
-    if not report:
-        st.divider()
-        st.info("Prepare a demo or enter a local repository, then run analysis. Atlas is needed for focused selection; the full suite still runs when it is unavailable.")
+    if st.button("Continue with existing knowledge →", key="skip_index", use_container_width=True):
+        _go("Run")
+    if st.button("← Choose another change", key="back_setup"):
+        _go("Setup")
+
+
+def _run():
+    st.header("Ready to listen for regressions.")
+    if not _require_config():
         return
-    if st.session_state.get("result_context") != context:
-        st.warning("Showing the previous run. Repository settings have changed; run analysis to update results.")
-    st.divider()
+    _change_card()
+    if st.session_state.get("knowledge_notice"):
+        st.success(st.session_state["knowledge_notice"])
+    st.write("TestEcho will trace this change, choose tests from recorded evidence, and run them.")
+    st.caption("Your checkout must already be clean and at the head commit. Uncertainty triggers the full suite. Gemini explains the recorded decisions afterward.")
+    if st.button("Run TestEcho →", key="analyze", type="primary", use_container_width=True):
+        config = _config()
+        try:
+            with st.spinner("Selecting and running tests…"):
+                report, summary, log = analyze_local(Path(config["repo_path"]), config["repo_id"], config["base"], config["head"])
+            st.session_state.update(result=report, summary=summary, action_log=log, result_context=_context(config))
+            with st.spinner("Explaining the recorded decisions…"):
+                st.session_state["explanation"] = explain_report(report, Path(config["repo_path"]))
+            st.session_state["explanation_style"] = "Simple"
+            _go("Results")
+        except (RuntimeError, ValueError, OSError) as exc:
+            st.error(str(exc))
+    if st.button("← Knowledge settings", key="back_knowledge"):
+        _go("Knowledge")
+
+
+def _results():
+    st.header("Your change, checked.")
+    report = _require_report()
+    if not report:
+        return
     metrics = dashboard_metrics(report, st.session_state.get("baseline"))
-    cards = st.columns(5)
-    cards[0].metric("Passed", metrics["passed"])
-    cards[1].metric("Failed / errors", metrics["failed"])
-    cards[2].metric("Selected / full", f"{report['selected_test_count']} / {report['full_suite_count'] if report['full_suite_count'] is not None else '?'}")
-    cards[3].metric("Fewer test cases", f"{metrics['test_reduction']:.0f}%" if metrics["test_reduction"] is not None else "Unknown")
+    columns = st.columns(4)
+    columns[0].metric("Passed", metrics["passed"])
+    columns[1].metric("Failed / errors", metrics["failed"])
+    columns[2].metric("Selected / full", f"{report['selected_test_count']} / {report['full_suite_count'] if report['full_suite_count'] is not None else '?'}")
     saved = metrics["time_saved"]
-    cards[4].metric("Measured time saved", f"{saved:.2f}s" if saved is not None else "Not measured")
-    st.caption(f"Analysis: {report['duration_seconds']:.2f}s · pytest: {report['test_duration_seconds']:.2f}s · skipped: {metrics['skipped']}. "
-               "Time saved compares full-suite wall time with total analysis wall time at the same commit; negative means the agent was slower.")
-    status = report["test_status"]
-    if status == "passed":
+    columns[3].metric("Time saved", f"{saved:.2f}s" if saved is not None else "Not measured")
+    reduction = f"{metrics['test_reduction']:.0f}% fewer cases" if metrics["test_reduction"] is not None else "Case reduction unknown"
+    st.caption(f"{reduction} · Analysis {report['duration_seconds']:.2f}s · Memory: {report['persistence']['status']}")
+    if report["test_status"] == "passed":
         st.success("The executed tests passed.")
-    elif status == "failed":
+    elif report["test_status"] == "failed":
         st.error("The executed tests found a failure.")
     else:
-        st.warning("Analysis needs attention: " + status.replace("_", " "))
+        st.warning("Analysis needs attention: " + report["test_status"].replace("_", " "))
     if report["fallback"]["ran"]:
         st.warning("Full-suite fallback · " + ", ".join(report["fallback"]["reasons"]))
-    if report["persistence"]["status"] != "saved":
-        st.info("Shared run memory: " + report["persistence"]["status"])
     if report.get("missed_test_audit", {}).get("missed_failures"):
-        st.error("The full-suite audit found additional failures in omitted tests; the failure count includes these audit findings.")
+        st.error("The count includes additional failures found by the full-suite audit.")
+    left, right = st.columns(2)
+    if left.button("Why these tests? →", key="show_explanation", type="primary", use_container_width=True):
+        _go("Explanation")
+    if right.button("See test results →", key="show_tests", use_container_width=True):
+        _go("Tests")
+    if left.button("Measure timing →", key="show_timing", use_container_width=True):
+        _go("Timing")
+    if right.button("Reports & logs →", key="show_reports", use_container_width=True):
+        _go("Reports")
+
+
+def _explanation():
+    st.header("Why these tests?")
+    report = _require_report()
+    if not report:
+        return
     explanation = st.session_state.get("explanation") or explain_report(report, generate=lambda _: "")
-    st.subheader("Why the agent made this decision")
-    style = st.radio("Explanation style", ["Simple", "Developer"], horizontal=True, key="explanation_style", index=0)
+    style = st.radio("Explanation style", ["Simple", "Developer"], horizontal=True, key="explanation_style")
     st.caption(("Gemini · " if explanation["source"] == "gemini" else "Template · ") + explanation["notice"])
-    st.markdown(explanation["simple" if style == "Simple" else "developer"])
-    evidence, outcomes, raw = st.tabs(["Selection evidence", "Test results", "Reports & logs"])
-    with evidence:
-        st.write("Changed files", report["changed_paths"])
-        for test in report["selected_tests"]:
-            with st.expander(test["test_id"]):
-                st.json(test["reasons"])
-    with outcomes:
-        st.dataframe([{"Test": o["test_id"], "Outcome": o["outcome"], "Seconds": round(o.get("duration_seconds", 0), 3)}
-                      for o in report["test_outcomes"]], use_container_width=True)
-        for field in ("errors", "collection_errors", "execution_errors"):
-            for error in report.get(field, []):
-                st.error(error)
-    with raw:
-        st.download_button("Download JSON", json.dumps(report, indent=2), "impact-report.json", "application/json")
-        st.download_button("Download Markdown", st.session_state.get("summary", ""), "impact-summary.md", "text/markdown")
-        st.code(st.session_state.get("action_log", ""), language="text")
-        st.code(report.get("pytest_output", ""), language="text")
-        st.json(report)
+    with st.container(height=300, border=True):
+        st.markdown(explanation["simple" if style == "Simple" else "developer"])
+    _back()
+
+
+def _tests():
+    st.header("Tests and evidence.")
+    report = _require_report()
+    if not report:
+        return
+    view = st.radio("Inspect", ["Outcomes", "Selection evidence", "Analysis errors"], horizontal=True)
+    with st.container(height=320, border=True):
+        if view == "Outcomes":
+            outcomes = report["test_outcomes"] + report.get("missed_test_audit", {}).get("missed_failures", [])
+            st.dataframe([{"Test": o["test_id"], "Outcome": o["outcome"], "Seconds": round(o.get("duration_seconds", 0), 3)}
+                          for o in outcomes], use_container_width=True, height=260)
+        elif view == "Selection evidence":
+            tests = report["selected_tests"]
+            if tests:
+                selected = st.selectbox("Selected test", range(len(tests)), format_func=lambda i: tests[i]["test_id"])
+                st.json(tests[selected]["reasons"])
+            else:
+                st.info("No tests were selected.")
+        else:
+            errors = report.get("errors", []) + report.get("collection_errors", []) + report.get("execution_errors", [])
+            st.code("\n\n".join(errors) or "No analysis errors recorded.", language="text")
+    _back()
+
+
+def _timing():
+    st.header("Measure, don't guess.")
+    report = _require_report()
+    if not report:
+        return
+    st.metric("Total analysis", f"{report['duration_seconds']:.2f}s")
+    st.write("Run the full suite at the same commit for a real comparison.")
+    st.caption("Time saved includes retrieval and collection overhead. Negative savings mean the agent was slower. This is a local observation, not a performance guarantee.")
+    if st.button("Measure full suite →", key="benchmark", type="primary", use_container_width=True):
+        config = _config()
+        try:
+            with st.spinner("Running the full suite…"):
+                baseline = benchmark_full_suite(Path(config["repo_path"]), config["repo_id"], config["head"])
+            st.session_state["baseline"] = baseline
+            _go("Results")
+        except (RuntimeError, ValueError, OSError) as exc:
+            st.error(str(exc))
+    _back()
+
+
+def _reports():
+    st.header("Take the evidence with you.")
+    report = _require_report()
+    if not report:
+        return
+    left, right = st.columns(2)
+    left.download_button("Download JSON", json.dumps(report, indent=2), "testecho-report.json", "application/json", use_container_width=True)
+    right.download_button("Download Markdown", st.session_state.get("summary", ""), "testecho-summary.md", "text/markdown", use_container_width=True)
+    view = st.radio("Preview", ["Summary", "Pytest log", "Agent log", "Raw JSON"], horizontal=True)
+    with st.container(height=270, border=True):
+        if view == "Summary":
+            st.markdown(st.session_state.get("summary", ""))
+        elif view == "Pytest log":
+            st.code(report.get("pytest_output", ""), language="text")
+        elif view == "Agent log":
+            st.code(st.session_state.get("action_log", ""), language="text")
+        else:
+            st.json(report)
+    _back()
+
+
+def _render(name, handler):
+    st.session_state["current_step"] = name
+    handler()
+
+
+def main():
+    load_dotenv(Path.cwd() / ".env", override=False)
+    st.set_page_config(page_title="TestEcho", page_icon="◉", layout="wide")
+    st.markdown("""<style>
+    .block-container {max-width:1080px;padding-top:3.8rem;padding-bottom:1.5rem}
+    div[data-testid="stMetric"] {background:#023430;border:1px solid #3D4F58;border-radius:12px;padding:15px}
+    h1,h2 {letter-spacing:-1px} h2 {padding-top:0.2rem}
+    .testecho-brand {font-size:1.5rem;font-weight:750;color:#FFFFFF;letter-spacing:-.8px;line-height:1.5}
+    .testecho-brand .echo {color:#00ED64} .brand-row {display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .powered {font-size:.8rem;color:#B8C4C2} div[data-testid="stCaptionContainer"] {color:#B8C4C2}
+    button[kind="primary"],button[kind="primary"] p {color:#001E2B!important;background-color:#00ED64!important}
+    </style><div class="brand-row"><div class="testecho-brand">◉ Test<span class="echo">Echo</span></div><span class="powered">Powered by MongoDB</span></div>""", unsafe_allow_html=True)
+    if "configuration" not in st.session_state:
+        st.session_state["configuration"] = {
+            "repo_path": os.environ.get("IMPACT_DEMO_REPO", ""), "repo_id": os.environ.get("REPO_ID", "demo-python"),
+            "base": os.environ.get("IMPACT_DEMO_BASE", "HEAD^"), "head": os.environ.get("IMPACT_DEMO_HEAD", "HEAD"),
+            "label": "Configured change",
+        }
+    handlers = {"Setup": _setup, "Knowledge": _knowledge, "Run": _run, "Results": _results,
+                "Explanation": _explanation, "Tests": _tests, "Timing": _timing, "Reports": _reports}
+    pages = {name: st.Page(partial(_render, name, handler), title=name,
+                           url_path=name.lower(), default=name == "Setup") for name, handler in handlers.items()}
+    st.session_state["pages"] = pages
+    navigation = st.navigation({"Workflow": [pages[name] for name in ("Setup", "Knowledge", "Run", "Results")],
+                                "Inspect": [pages[name] for name in ("Explanation", "Tests", "Timing", "Reports")]})
+    with st.sidebar:
+        st.markdown("**TestEcho**")
+        st.caption("Powered by MongoDB")
+        st.caption("Atlas: " + ("configured" if os.environ.get("MONGODB_URI") else "not configured"))
+        st.caption("Explanations: " + ("Gemini" if os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") else "templates"))
+    navigation.run()
