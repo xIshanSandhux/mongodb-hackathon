@@ -7,6 +7,7 @@ from pathlib import Path, PurePosixPath
 
 from .gitrepo import read_python, resolve_commit, tree_files
 from .models import Document, Snapshot
+from .service_graph import SERVICE_MAP_PATH, service_relationships
 
 
 class IndexingError(ValueError):
@@ -124,14 +125,14 @@ def build_snapshot(repo: Path, repo_id: str, commit: str) -> Snapshot:
     module_nodes = {n["path"]: n for n in nodes if n["node_type"] == "module"}
     edges = {}
 
-    def add_edge(dependency: str, target: Document):
+    def add_edge(dependency: str, target: Document, edge_kind: str | None = None, **evidence):
         source_id = module_nodes[dependency]["node_id"]
         target_id = target["node_id"]
-        kind = "tested_by" if target["kind"] == "test" else "imports"
+        kind = edge_kind or ("tested_by" if target["kind"] == "test" else "imports")
         eid = stable_id(repo_id, sha, source_id, target_id, kind)
         edges[eid] = {"_id": eid, "repo_id": repo_id, "base_sha": sha,
                       "source_id": source_id, "target_id": target_id, "kind": kind,
-                      "source_path": dependency, "target_path": target["path"]}
+                      "source_path": dependency, "target_path": target["path"], **evidence}
 
     for path, tree in parsed.items():
         targets = [module_nodes[path]] + [n for n in nodes if n["path"] == path and n["kind"] == "test"]
@@ -145,4 +146,9 @@ def build_snapshot(repo: Path, repo_id: str, commit: str) -> Snapshot:
             for target in nodes:
                 if target["kind"] == "test" and PurePosixPath(target["path"]).is_relative_to(parent):
                     add_edge(path, target)
+    try:
+        for dependency, consumer in service_relationships(parsed.get(SERVICE_MAP_PATH), modules):
+            add_edge(dependency, module_nodes[consumer], "service_call", evidence_path=SERVICE_MAP_PATH)
+    except ValueError as exc:
+        raise IndexingError(f"Invalid service registry: {exc}") from exc
     return Snapshot(repo_id, sha, nodes, sorted(edges.values(), key=lambda e: e["_id"]))

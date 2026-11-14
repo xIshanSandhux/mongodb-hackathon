@@ -10,6 +10,8 @@
 
 `ARCH.md` defines the authoritative fields and interfaces. This is a conservative file-level import graph, not symbol-level call analysis.
 
+PayFlow integration adds declared provider-to-consumer `service_call` edges from the literal registry in `app/dependency_graph.py`, with the metadata path recorded as evidence. Snapshot completion markers now require schema version 2; reindex prior snapshots before focused analysis. Changed registry files cause full-suite fallback. The existing two-hop limit and third-edge uncertainty check still apply.
+
 ## Index the demo repository
 
 Install using README.md. Set `MONGODB_URI` and optional `MONGODB_DATABASE` (default `pr_impact`) in the environment or `.env` in your current directory.

@@ -10,6 +10,7 @@ import streamlit as st
 
 from .dashboard_service import SCENARIOS, analyze_local, benchmark_full_suite, dashboard_metrics, index_local, prepare_demo
 from .explanations import explain_report
+from .payflow_demo import PAYFLOW_SCENARIOS, prepare_payflow_demo
 
 
 def _go(page):
@@ -65,6 +66,9 @@ def _change_card():
     with st.container(border=True):
         st.write("**" + config.get("label", "Local change") + "**")
         st.caption(f"{Path(config['repo_path']).name} · {config['base'][:10]} → {config['head'][:10]}")
+        if config.get("source_url"):
+            st.caption(("Local replay on pinned source" if config.get("generated_change") else "Original upstream commit replay")
+                       + f" · [PayFlow repository]({config['source_url']})")
 
 
 def _setup():
@@ -72,22 +76,27 @@ def _setup():
     st.caption("Start with a prepared demo, or use your own local checkout.")
     mode = st.radio("Repository", ["Prepared demo", "Local repository"], horizontal=True, key="repository_mode")
     if mode == "Prepared demo":
-        scenario = st.selectbox("Demo scenario", SCENARIOS)
+        demo_app = st.selectbox("Demo application", ["PayFlow payments", "Small starter"], key="demo_app")
+        scenario = st.selectbox("Demo scenario", PAYFLOW_SCENARIOS if demo_app == "PayFlow payments" else SCENARIOS)
         descriptions = {
             "Focused change": "A pricing change that preserves behavior. See which checks TestEcho chooses.",
             "Regression": "A pricing bug with a real failing test. Watch the failure appear in the report.",
             "Unmapped file fallback": "A new Python file with no base mapping. TestEcho should run the whole suite.",
+            "Gateway validation refactor": "A behavior-preserving refactor in the real PayFlow gateway. Uses its actual test suite.",
+            "Gateway regression": "A deliberate local precision-validation bug in PayFlow. Its real tests should catch it.",
+            "Vendor PR replay": "Replay the original vendor-metadata commits from PayFlow's repository, including its new regression test.",
         }
         st.info(descriptions[scenario])
         if st.button("Prepare & continue →", key="prepare", type="primary", use_container_width=True):
             try:
                 with st.spinner("Preparing a separate demo repository…"):
-                    demo = prepare_demo(scenario)
+                    demo = prepare_payflow_demo(scenario) if demo_app == "PayFlow payments" else prepare_demo(scenario)
                 _set_config({"repo_path": str(demo.repo), "repo_id": demo.repo_id,
-                             "base": demo.base, "head": demo.head, "label": scenario})
+                             "base": demo.base, "head": demo.head, "label": demo_app + " · " + scenario,
+                             "source_url": demo.source_url, "generated_change": demo.generated_change})
                 _go("Knowledge")
-            except (ValueError, OSError):
-                st.error("Could not prepare the demo. Check Git and temporary-directory access.")
+            except (ValueError, OSError, RuntimeError) as exc:
+                st.error("Could not prepare the demo. " + str(exc))
         if _ready() and st.button("Continue with configured change →", key="continue_configured", use_container_width=True):
             _go("Knowledge")
     else:

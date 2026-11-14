@@ -5,11 +5,13 @@ An explainable CI agent that selects and runs regression tests for a pull reques
 ## Local dashboard
 
 ```sh
-python -m pip install -e '.[dev,ui]'
+python -m pip install -e '.[dev,ui,payflow]'
 python -m streamlit run streamlit_app.py
 ```
 
 Open [TestEcho](http://127.0.0.1:8501). The short page flow is **Setup → Knowledge → Run → Results**: prepare a demo, index its base or continue with existing knowledge, then run TestEcho. Successful actions advance automatically. Results link to separate Explanation, Tests, Timing, and Reports pages; long evidence/logs stay in bounded panels. The interface uses MongoDB green/navy colors and displays **Powered by MongoDB**. Atlas credentials enable focused selection; without Atlas, actual full-suite tests still run and the reason is shown. `IMPACT_DEMO_REPO`, `IMPACT_DEMO_BASE`, and `IMPACT_DEMO_HEAD` can preconfigure a team repository; Local repository settings accept another checkout.
+
+**PayFlow payments** uses [the real payments app](https://github.com/ash-raf-codes/payment_processing_app), cloned separately at a pinned commit. Choose its gateway validation refactor, deliberate local gateway regression, or historical vendor PR replay. TestEcho indexes the app's declared service dependencies as well as Python imports. The **Small starter** application remains available for quick synthetic examples. Reindex old snapshots after upgrading to graph schema version 2. See [PayFlow verification](docs/PAYFLOW-DEMO.md) for actual results and scope.
 
 Set `GEMINI_API_KEY` in your ignored `.env` to enable automatic Gemini summaries. `GEMINI_MODEL` is configurable. Simple explanations are the default; switching to Developer reuses the same response. Without Gemini, an evidence-based template appears. Bounded evidence, relevant Python snippets, and failure logs may be sent to Gemini, with known secrets redacted. Do not use the demo with sensitive source you do not intend to share.
 
