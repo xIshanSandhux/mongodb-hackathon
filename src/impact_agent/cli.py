@@ -7,9 +7,9 @@ from pathlib import Path
 import typer
 from pymongo.errors import PyMongoError
 
-from .atlas import atlas_database, create_atlas_client, setup_atlas
+from .atlas import VECTOR_INDEX, atlas_database, create_atlas_client, setup_atlas
 from .gitrepo import GitError
-from .graph_store import AtlasGraphStore
+from .graph_store import AtlasGraphStore, graph_store_from_env
 from .indexer import IndexingError, build_snapshot
 from .agent import analyze_repository
 from .retrieval import AtlasRetrievalStore
@@ -54,6 +54,7 @@ def analyze(
     head: str = typer.Option(..., help="Head commit SHA for the pull request."),
     output: Path = typer.Option(Path("impact-report.json"), help="Path for the JSON report."),
     summary: Path = typer.Option(Path("impact-summary.md"), help="Path for the Markdown summary."),
+    audit_missed_tests: bool = typer.Option(False, "--audit-missed-tests", help="Audit passing focused runs with full pytest."),
 ) -> None:
     """Select regression tests, run pytest, remember outcomes, and write reports."""
     try:
@@ -63,8 +64,9 @@ def analyze(
             except (PyMongoError, ValueError):
                 graph_store = None
             retrieval = (AtlasRetrievalStore(graph_store.knowledge,
-                         os.environ.get("MONGODB_VECTOR_INDEX", "autoEmbed")) if graph_store is not None else None)
-            report = analyze_repository(repo, repo_id, base, head, output, summary, graph_store, retrieval)
+                         os.environ.get("MONGODB_VECTOR_INDEX", VECTOR_INDEX)) if graph_store is not None else None)
+            report = analyze_repository(repo, repo_id, base, head, output, summary, graph_store, retrieval,
+                                        audit_missed_tests=audit_missed_tests)
     except (ValueError, OSError):
         typer.echo("Analysis could not write its reports. Check distinct report paths, permissions, and repository files.", err=True)
         raise typer.Exit(code=2) from None

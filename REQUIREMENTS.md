@@ -61,3 +61,5 @@ AGENT-1/2 use **Implemented agent contract** in `ARCH.md`. Both CLI commands are
 - **By 3:45:** One PR Action runs analysis, pytest, report generation, and memory persistence end to end.
 - **By 4:30:** The three demo scenarios work and the selected-versus-full suite measurements are captured.
 - **By 5:00:** Reserve the remaining time for integration fixes and a presentation rehearsal.
+
+With `analyze --audit-missed-tests`, run full pytest after a passing focused run. Report and persist failures from omitted tests when the audit completes. A failing or incomplete audit fails the check.

@@ -21,7 +21,9 @@ def _matches(candidate: str, collected: str) -> bool:
 
 
 def _run_document(report: Document) -> Document:
-    failed = [o["test_id"] for o in report["test_outcomes"] if o["outcome"] in ("failed", "error")]
+    missed = report.get("missed_test_audit", {}).get("missed_failures", [])
+    outcomes = [*report["test_outcomes"], *missed]
+    failed = [o["test_id"] for o in outcomes if o["outcome"] in ("failed", "error")]
     summary = "Changed paths: " + ", ".join(report["changed_paths"])
     summary += "; test result: " + report["test_status"] + "; failed tests: " + ", ".join(failed)
     return {
@@ -29,7 +31,7 @@ def _run_document(report: Document) -> Document:
         "head_sha": report["head_sha"], "kind": "pr_run", "path": "", "symbol": report["run_id"],
         "search_text": summary, "change_summary": summary, "created_at": report["created_at"],
         "changed_paths": report["changed_paths"], "selected_test_ids": [t["test_id"] for t in report["selected_tests"]],
-        "selection_evidence": report["selected_tests"], "test_outcomes": report["test_outcomes"],
+        "selection_evidence": report["selected_tests"], "test_outcomes": outcomes, "missed_failures": missed,
         "fallback": report["fallback"], "test_status": report["test_status"],
         "exit_code": report["exit_code"], "duration_seconds": report["duration_seconds"],
     }
@@ -37,7 +39,7 @@ def _run_document(report: Document) -> Document:
 
 def analyze_repository(repo: Path, repo_id: str, base: str, head: str, output: Path, summary: Path,
                        graph_store: GraphStore | None, retrieval: RetrievalStore | None,
-                       *, timeout: float = 300) -> Document:
+                       *, timeout: float = 300, audit_missed_tests: bool = False) -> Document:
     started = time.monotonic()
     repo, output, summary = repo.resolve(), output.resolve(), summary.resolve()
     if output == summary:
@@ -61,6 +63,8 @@ def analyze_repository(repo: Path, repo_id: str, base: str, head: str, output: P
         "errors": [], "collection_errors": [], "execution_errors": [],
         "persistence": {"status": "not_attempted"}, "pytest_output": "",
     }
+    if audit_missed_tests:
+        report["missed_test_audit"] = {"status": "skipped", "missed_failures": []}
     try:
         base_sha, head_sha = resolve_commit(repo, base), resolve_commit(repo, head)
         report.update(base_sha=base_sha, head_sha=head_sha,
@@ -110,6 +114,30 @@ def analyze_repository(repo: Path, repo_id: str, base: str, head: str, output: P
         if plan.full_suite and report["full_suite_count"] is None:
             report["selected_tests"] = [{"test_id": node, "reasons": [{"kind": "full_suite", "reasons": plan.fallback_reasons}]}
                                          for node in execution.collected_ids]
+        if audit_missed_tests and not plan.full_suite and report["exit_code"] == 0:
+            audit = report["missed_test_audit"]
+            audit["status"] = "error"
+            validate_checkout(repo, head_sha)
+            full_run = run_tests(repo, None, timeout)
+            audit.update(exit_code=full_run.exit_code, duration_seconds=full_run.duration_seconds)
+            complete = (
+                full_run.exit_code in (0, 1)
+                and not full_run.errors
+                and set(full_run.collected_ids) == set(collection.collected_ids)
+                and {outcome["test_id"] for outcome in full_run.outcomes} == set(collection.collected_ids)
+                and all(outcome["outcome"] != "incomplete" for outcome in full_run.outcomes)
+            )
+            if complete:
+                audit["status"] = "completed"
+                audit["missed_failures"] = [
+                    outcome for outcome in full_run.outcomes
+                    if outcome["test_id"] not in expected and outcome["outcome"] in ("failed", "error")
+                ]
+                if full_run.exit_code:
+                    report.update(exit_code=1, test_status="failed")
+            else:
+                report["execution_errors"].append("missed_test_audit_incomplete")
+                report.update(exit_code=2, test_status="error")
         report["duration_seconds"] = time.monotonic() - started
         if retrieval is None:
             report["persistence"] = {"status": "unavailable", "warning": "Run memory was not saved because Atlas is unavailable."}
@@ -120,8 +148,12 @@ def analyze_repository(repo: Path, repo_id: str, base: str, head: str, output: P
             except PyMongoError:
                 report["persistence"] = {"status": "failed", "warning": "Atlas run persistence failed; this run will not inform future selections."}
     except GitError as exc:
+        if report["test_status"] != "not_run":
+            report.update(exit_code=2, test_status="error")
         report["errors"].append(str(exc))
     except OSError:
+        if report["test_status"] != "not_run":
+            report.update(exit_code=2, test_status="error")
         report["errors"].append("Unable to start or record pytest; check the interpreter and file permissions.")
     report["duration_seconds"] = time.monotonic() - started
     write_reports(report, output, summary)

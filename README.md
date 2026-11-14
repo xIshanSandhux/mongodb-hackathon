@@ -77,7 +77,7 @@ impact-agent analyze --repo /path/to/demo-repo --repo-id demo-python --base <bas
 
 The command merges graph, semantic, and prior-failure evidence, runs selected pytest tests or the full suite, saves run memory, and writes both reports. Failed tests return a failing exit status. Missing Atlas credentials/retrieval trigger full-suite fallback; unsuccessful memory storage is a visible warning. Reports must not overwrite tracked files. The demo's own dependencies must be installed into the Python environment running the agent.
 
-The default vector index name is `autoEmbed`; set `MONGODB_VECTOR_INDEX` if your team's index has another name. Person 1 still provisions and verifies the actual index. See [the graph handoff](docs/GRAPH-HANDOFF.md) and [the agent handoff](docs/AGENT-HANDOFF.md).
+The default vector index name is `knowledge_vector`; set `MONGODB_VECTOR_INDEX` if your team's index has another name. Person 1 still provisions and verifies the actual index. See [the graph handoff](docs/GRAPH-HANDOFF.md) and [the agent handoff](docs/AGENT-HANDOFF.md).
 
 To run Person 1's live Atlas vector and prior-run smoke check separately, configure `MONGODB_URI` and run `python -m impact_agent.atlas`. The `index` command bootstraps the collections and vector index, but does not run this smoke check.
 
@@ -93,3 +93,5 @@ AGENTS.md           Instructions for Codex
 ```
 
 The GitHub Actions workflow and sample Python application belong in a separate demo repository, as described in `ARCH.md`.
+
+Add `--audit-missed-tests` to replay a passing focused run against the full suite and save any missed failures for later selection.
