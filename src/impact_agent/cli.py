@@ -67,6 +67,11 @@ def analyze(
                          os.environ.get("MONGODB_VECTOR_INDEX", VECTOR_INDEX)) if graph_store is not None else None)
             report = analyze_repository(repo, repo_id, base, head, output, summary, graph_store, retrieval,
                                         audit_missed_tests=audit_missed_tests)
+            retrieval = (AtlasRetrievalStore(
+                graph_store.knowledge,
+                os.environ.get("MONGODB_VECTOR_INDEX", VECTOR_INDEX),
+            ) if graph_store is not None else None)
+            report = analyze_repository(repo, repo_id, base, head, output, summary, graph_store, retrieval)
     except (ValueError, OSError):
         typer.echo("Analysis could not write its reports. Check distinct report paths, permissions, and repository files.", err=True)
         raise typer.Exit(code=2) from None

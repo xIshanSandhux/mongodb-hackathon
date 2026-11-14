@@ -2,11 +2,12 @@
 
 from pymongo.errors import OperationFailure
 
+from .atlas import VECTOR_INDEX
 from .models import Document
 
 
 class AtlasRetrievalStore:
-    def __init__(self, knowledge, index_name: str = "autoEmbed"):
+    def __init__(self, knowledge, index_name: str = VECTOR_INDEX):
         self.knowledge = knowledge
         self.index_name = index_name
         self._ready = False
