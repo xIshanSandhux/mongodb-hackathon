@@ -70,7 +70,7 @@ Run the full pytest suite when the base snapshot is missing or stale, a changed 
 
 ## Implemented graph contract (GRAPH-1 / GRAPH-2)
 
-The CLI flags above are unchanged. `index` is implemented; the `analyze` CLI remains owned by Person 3. Graph analysis is available through `analyze_graph(repo_path, repo_id, base_sha, head_sha, store)` in `impact_agent.graph`. Pass an `AtlasGraphStore(database)` or use the environment-backed context manager in `graph_store.py`.
+The CLI flags above are unchanged. Both CLI commands are implemented. Graph analysis is available through `analyze_graph(repo_path, repo_id, base_sha, head_sha, store)` in `impact_agent.graph`. Pass an `AtlasGraphStore(database)` or use the environment-backed context manager in `graph_store.py`.
 
 ### Node and edge identity
 
@@ -95,6 +95,20 @@ Use ordinary pytest naming/collection in the demo. Custom collection, inherited 
 `requires_full_suite` is true if `fallback_reasons` is nonempty. Reasons include `missing_base_snapshot`, `stale_base_snapshot`, `cannot_parse_python: <path>`, `unmapped_python: <path>`, `unsupported_python: <path>`, `atlas_retrieval_failed`, and `graph_truncated`. The graph cutoff signal is conservative: any third edge observed by the lookahead triggers fallback. Added/renamed Python paths conservatively trigger unmapped fallback; deleted modules trace their base graph. Database diagnostics are sanitized. Invalid Git inputs raise `GitError` and must fail analysis. The test runner must ensure its checkout matches head before executing tests.
 
 Empty graph candidates alone do not force fallback: Person 3 still tries vector and prior-run retrieval. Their final selector must run the full suite if no defensible candidates remain or retrieval fails. Execution, run persistence, and final reporting remain AGENT-1/AGENT-2. See `docs/GRAPH-HANDOFF.md` for examples.
+
+## Implemented agent contract (AGENT-1 / AGENT-2)
+
+`selection.assemble_plan(impact, retrieval)` produces `TestPlan(candidates, fallback_reasons)`; `full_suite` reflects any fallback reason. Graph/direct evidence is retained and deduplicated with semantic matches and historical failures. Mandatory graph fallback skips extra queries. Otherwise each distinct changed code chunk queries up to three tests, and a combined changed-path/code summary queries up to three prior runs. Only failed/error outcomes from prior runs contribute tests. Retrieval errors, malformed evidence, or an empty final plan cause full-suite fallback.
+
+`RetrievalStore` defines `search_tests(repo_id, base_sha, text, limit=3)`, `search_runs(repo_id, text, limit=3)`, and `save_run(document)`. Default `AtlasRetrievalStore` uses the existing `knowledge` collection and `MONGODB_VECTOR_INDEX` (default `autoEmbed`); it does not create indexes. The query uses `$vectorSearch.query.text` against `search_text`, with repo/base/kind filters for tests and repo/kind filters for runs across history. The adapter verifies a READY/queryable index before searching. Results include `score` from `vectorSearchScore`. See [MongoDB's current query syntax](https://www.mongodb.com/docs/vector-search/query/aggregation-stages/vector-search-stage.md). Queries are bounded to 12,000 characters; rank/score is evidence, not a calibrated probability of relevance.
+
+`agent.analyze_repository(...)` validates checkout HEAD, rejects tracked changes and untracked Python files, builds the plan, collects the full head suite, validates candidates against collected IDs, then invokes pytest in a subprocess. Parameterized function IDs expand to all their cases. Missing IDs trigger full-suite fallback instead of being silently dropped. The runner clears configured pytest `addopts`/`PYTEST_ADDOPTS` so selection is controlled by the plan, but preserves project configuration and installed plugins. It removes Atlas URI variables from the test subprocess. Phase-level records distinguish assertion failures, setup/teardown errors, skips, and incomplete runs. Recorded failures cannot be overridden by an exit-zero hook, and changed collection between planning/execution yields a failing analysis status.
+
+Report schema version 1 includes `run_id`, `repo_id`, `base_sha`, `head_sha`, `changed_paths`, `planned_candidates`, `selected_tests` with reasons, `test_outcomes`, `fallback` (`ran`, `reasons`), `full_suite_count`, `selected_test_count`, collection/test/total durations, `test_status`, `exit_code`, error arrays, pytest output, and `persistence.status`. Counts refer to collected pytest cases, including parameterization. Full-suite collection is measured overhead; the full suite is not executed merely to establish a baseline count. Its count is unknown when collection fails.
+
+Each executed analysis writes a `kind=pr_run` document with the agreed common fields, unique `_id`/`symbol`, changed-path summary, selected test IDs/evidence, per-case `test_outcomes`, fallback details, status, and duration. Memory storage failure is a visible warning (`failed`/`unavailable`); it preserves the actual pytest exit status. Tests passing during Atlas fallback do not imply persistence succeeded. Invalid Git/checkout inputs produce error reports without running tests. Invalid/unsafe report destinations are rejected without overwriting repository files. CLI statuses are 0 for passing tests, 1 for failing tests, 2 for analysis/execution errors, 5 for no tests, and 124 for timeout; other positive pytest error statuses are preserved.
+
+Default collection/execution timeouts are 60/300 seconds; the Python API accepts a shorter execution timeout. The agent and demo dependencies must be installed in the same Python environment. The runner never checks out or edits the demo source. Live vector retrieval and saved-run similarity still require team Atlas verification; local test doubles validate the interface, not the service.
 
 ## GitHub Actions output (integration)
 
