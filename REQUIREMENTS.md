@@ -22,10 +22,19 @@ For a pull request in one Python demo repository, produce an explainable regress
 ## Non-functional requirements and exclusions
 
 - Support Python and pytest only for the MVP.
-- Use a Python CLI for the agent and GitHub Actions for CI triggering and output. No UI is required.
+- Keep core analysis in the Python CLI and GitHub Actions. The user additionally approved a local Streamlit dashboard for indexing, analysis, and results.
 - Keep graph relationships, searchable code/test/run documents, and vector queries in MongoDB Atlas.
 - Keep credentials out of source control. The demo workflow uses team-owned branches because ordinary Actions secrets are unavailable to fork PR workflows.
-- Do not implement security-check findings, automated cleanup suggestions, multi-language support, PR comments, or a dashboard in the five-hour MVP.
+- Do not implement security-check findings, automated cleanup suggestions, multi-language support, or PR comments. The local dashboard is an explicitly approved scope extension.
+
+## Approved dashboard and explanation extension
+
+- Local-only dark Streamlit dashboard, using the existing CLI. Support prepared real-Git demo scenarios and advanced repository/base/head inputs; do not modify an existing repository's checkout.
+- Lead with pass/fail counts, selected/full case counts, and measured time savings. Without a successful same-head full-suite benchmark, show time savings as unavailable. Negative savings must remain visible.
+- Automatically generate Simple and Developer explanations in one Gemini request after each completed analysis. Simple is the default and uses judge-friendly language. Developer mode explains changed paths, graph evidence, similarity scores, prior regressions, and fallback reasons.
+- Gemini may receive bounded report evidence, relevant committed Python snippets, and failure logs, with known credentials redacted. It cannot select tests, change results, or claim hidden internal reasoning. Display recorded evidence separately as authoritative.
+- Missing credentials, API failures, or invalid generated output use template explanations and preserve results. UI reruns/style toggles must not rerun tests or call Gemini again.
+- Keep API credentials in environment variables or ignored `.env`; no credential input fields or committed keys. `GEMINI_API_KEY`/`GOOGLE_API_KEY` are excluded from pytest subprocess environments.
 
 ## Four-person ticket breakdown
 

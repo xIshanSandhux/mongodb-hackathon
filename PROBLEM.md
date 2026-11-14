@@ -12,6 +12,8 @@ We want a CI agent that turns a pull request into an explainable test plan. It s
 
 The first version focuses on test selection and reporting. A follow-up can surface findings from defensive security checks and suggest focused code cleanup for reviewer approval.
 
+The user has expanded the demo scope to include a local Streamlit dashboard for indexing, analysis, and results. Optional Gemini summaries explain the recorded decisions in simple language by default, with a developer view. Gemini explains evidence after execution; it does not select tests or alter outcomes. Missing Gemini access uses deterministic explanations. Time savings are shown only against an actual same-commit full-suite benchmark.
+
 ## How we will judge success
 
 Replay past pull requests and compare selected tests with results from the full suite. Measure how many known failing tests the selection catches, how many tests it runs, and how long it takes to return results. Record misses and check whether reviewers can understand the reasons given for each selection.

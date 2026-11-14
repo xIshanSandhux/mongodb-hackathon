@@ -2,7 +2,7 @@
 
 ## Goal and MVP boundary
 
-The agent analyzes a pull request in a separate Python demo repository, selects likely regression tests, runs them, and explains the selection. It uses MongoDB Atlas for repository context, graph traversal, semantic search, and memory of earlier pull request outcomes. The MVP is a Python CLI invoked by GitHub Actions; it has no web UI.
+The agent analyzes a pull request in a separate Python demo repository, selects likely regression tests, runs them, and explains the selection. It uses MongoDB Atlas for repository context, graph traversal, semantic search, and memory of earlier pull request outcomes. The core is a Python CLI invoked by GitHub Actions; the user additionally approved a local Streamlit dashboard.
 
 The implementation is intentionally limited to one Python repository and pytest. Security checks and code-cleanup recommendations are follow-up work. See `PROBLEM.md` for the product goal and `REQUIREMENTS.md` for acceptance criteria and ticket ownership.
 
@@ -128,6 +128,18 @@ The Action in the demo repository runs `impact-agent analyze` for PRs and suppor
 
 For the demo replay, record selected-test count, full-suite test count, elapsed time, and whether known failing tests were caught. Show reviewers the reason attached to each selected test. A small hackathon replay demonstrates the workflow but does not establish production recall or safety.
 
-Defer multi-language parsing, a web dashboard, PR comments, security-check findings, cleanup suggestions, and broad historical benchmarking beyond the replayable demo.
+Defer multi-language parsing, public hosting, PR comments, security-check findings, cleanup suggestions, and broad historical benchmarking beyond the replayable demo.
+
+## Local dashboard and Gemini extension
+
+`streamlit_app.py` starts `impact_agent.dashboard.main`. Optional dependencies are installed with `pip install -e '.[dev,ui]'`. `.streamlit/config.toml` binds the server to `127.0.0.1` with a dark theme. The UI calls the existing CLI through `dashboard_service`, preserving its Atlas setup, fallback behavior, status codes, report schema, and missed-test audit interface. The UI does not change core selection behavior.
+
+An explicit Prepare Demo action creates a separate temporary Git repository with a baseline and replayable head (focused behavior-preserving change, regression, or unmapped Python file). Results are actual CLI/pytest runs. `IMPACT_DEMO_REPO`, `IMPACT_DEMO_BASE`, `IMPACT_DEMO_HEAD`, and `REPO_ID` can preconfigure a team repository. Generated reports stay in temporary directories outside demo source.
+
+Session state holds results, downloads, a baseline, and both explanation styles. Only explicit actions execute indexing, analysis, or a benchmark. A new analysis automatically calls the explanation service once; toggling styles reuses the same response. Changes in input settings label previously displayed results as a previous run. Full-suite benchmarking is opt-in. Measured time saved is full-suite subprocess wall time minus total analysis wall time (including collection/retrieval), at matching repo ID/head. An unavailable baseline is never estimated from case counts; negative differences remain visible. Benchmarks are local observations, not established performance claims.
+
+`explanations.explain_report` returns `{simple, developer, source, notice}`. It uses the Google Gen AI SDK with `GEMINI_API_KEY` (or `GOOGLE_API_KEY`), configurable `GEMINI_MODEL` (default `gemini-3.1-flash-lite`), JSON output schema, a 15-second request timeout, and one attempt before template fallback. Gemini receives selected report fields, up to 30 test/evidence records, bounded failure logs, and up to three changed committed Python snippets. Known environment credentials, database URIs, and common key assignments are redacted before sending. Report/code/log text is treated as untrusted data. No model thoughts are requested; the output is a concise explanation of recorded decisions. Raw recorded outcomes remain authoritative.
+
+The service returns deterministic Simple/Developer explanations if the key/SDK/service is unavailable or output is invalid. API errors are not exposed with credentials. CLI analysis stays usable without UI dependencies or Gemini. Live generation of both explanation styles was verified using Flash Lite against a real Atlas-backed demo report; this does not establish general explanation accuracy or service availability.
 
 With `analyze --audit-missed-tests`, run full pytest after a passing focused run. Report and persist failures from omitted tests when the audit completes. A failing or incomplete audit fails the check.

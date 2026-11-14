@@ -2,7 +2,20 @@
 
 An explainable CI agent that selects and runs regression tests for a pull request. Python indexing, graph impact tracing, test selection/execution, reports, and a default Atlas retrieval/memory adapter are implemented. Live Atlas integration and the separate demo/Actions workflow remain to be verified. See [PROBLEM.md](PROBLEM.md), [REQUIREMENTS.md](REQUIREMENTS.md), and [ARCH.md](ARCH.md) for scope and shared interfaces.
 
-## Requirements
+## Local dashboard
+
+```sh
+python -m pip install -e '.[dev,ui]'
+python -m streamlit run streamlit_app.py
+```
+
+Open [the dashboard](http://127.0.0.1:8501). Click **Prepare demo**, then **Run analysis**. Atlas credentials enable focused selection; without Atlas, actual full-suite tests still run and the reason is shown. Use **Index base** to index the selected base through the existing Atlas setup. A preconfigured team repository can be supplied with `IMPACT_DEMO_REPO`, `IMPACT_DEMO_BASE`, and `IMPACT_DEMO_HEAD`; advanced settings accept any local demo checkout.
+
+Set `GEMINI_API_KEY` in your ignored `.env` to enable automatic Gemini summaries. `GEMINI_MODEL` is configurable. Simple explanations are the default; switching to Developer reuses the same response. Without Gemini, an evidence-based template appears. Bounded evidence, relevant Python snippets, and failure logs may be sent to Gemini, with known secrets redacted. Do not use the demo with sensitive source you do not intend to share.
+
+The full-suite baseline button executes real tests to measure a comparison; time savings remain **Not measured** until a matching baseline exists. Generated demos/reports live in temporary directories. The UI runs only on localhost and is not deployed.
+
+## Runtime requirements
 
 - Python 3.11 or newer
 - Git
