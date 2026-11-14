@@ -44,6 +44,14 @@ Replace Person 1–4 with teammate names at kickoff. First agree on the CLI flag
 
 ## Integration checkpoints
 
+### GRAPH ticket integration details
+
+GRAPH-1/2 use the **Implemented graph contract** in `ARCH.md`. Stable `node_id` differs from snapshot `_id`. The completion marker uses existing `kind=code`, `node_type=snapshot` and must be excluded from code vector results. Two-hop traversal uses MongoDB's zero-based `maxDepth=1`.
+
+Graph acceptance includes committed-tree reads despite dirty worktrees, import and scoped conftest relationships, ordered path evidence, and fallback signals for missing/stale snapshots, unparseable/unmapped Python, unsupported Python symlinks, and Atlas errors. The handoff is `analyze_graph(...) -> GraphImpact`. Person 3 owns vector/memory merging, final no-candidate fallback, execution, and reports. Live graph verification requires `MONGODB_TEST_URI` and is separate from local tests.
+
+### Team schedule
+
 - **At 0:20:** CLI flags, collection fields, `repo_id`, snapshot commit behavior, and report fields are agreed.
 - **By 2:30:** Atlas, graph indexing, selector/runner, and demo workflow can be exercised independently with stubs or seeded data.
 - **By 3:45:** One PR Action runs analysis, pytest, report generation, and memory persistence end to end.

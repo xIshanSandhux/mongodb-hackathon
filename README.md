@@ -1,6 +1,6 @@
 # PR Impact Agent
 
-An explainable CI agent that selects and runs regression tests for a pull request. The current repository contains the project brief and a starter Python CLI package. See [PROBLEM.md](PROBLEM.md), [REQUIREMENTS.md](REQUIREMENTS.md), and [ARCH.md](ARCH.md) for the product scope, acceptance criteria, and design.
+An explainable CI agent that selects and runs regression tests for a pull request. Python indexing and graph impact tracing are implemented; test selection/execution and CI integration remain separate tickets. See [PROBLEM.md](PROBLEM.md), [REQUIREMENTS.md](REQUIREMENTS.md), and [ARCH.md](ARCH.md) for scope and shared interfaces.
 
 ## Requirements
 
@@ -8,7 +8,16 @@ An explainable CI agent that selects and runs regression tests for a pull reques
 - Git
 - MongoDB Atlas access for implementing and running the Atlas-backed features
 
-Python 3.12 is used by the current development environment.
+Local graph checks were run with Python 3.14.3; the package supports Python 3.11 or newer.
+
+## Set up on macOS / Linux
+
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements-dev.txt
+cp .env.example .env
+```
 
 ## Set up on Windows PowerShell
 
@@ -46,7 +55,7 @@ MONGODB_DATABASE=pr_impact
 REPO_ID=demo-python
 ```
 
-## CLI scaffold
+## CLI
 
 The package installs an `impact-agent` command. Check its available commands with:
 
@@ -54,7 +63,13 @@ The package installs an `impact-agent` command. Check its available commands wit
 impact-agent --help
 ```
 
-The `index` and `analyze` command interfaces are scaffolded from [ARCH.md](ARCH.md); their Atlas indexing, test selection, execution, and reporting behavior will be implemented in the assigned tickets.
+`index` writes committed Python modules, symbols, pytest tests, edges, and a completion marker to Atlas:
+
+```sh
+impact-agent index --repo /path/to/demo-repo --repo-id demo-python --commit <base-sha>
+```
+
+`analyze` still exits with an implementation-pending message; Person 3 owns its integration. GRAPH-2 is available as `impact_agent.graph.analyze_graph`. See [the graph handoff](docs/GRAPH-HANDOFF.md) for usage and tests. Person 1 still owns vector index creation/search.
 
 ## Project layout
 
