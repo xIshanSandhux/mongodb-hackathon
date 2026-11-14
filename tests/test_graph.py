@@ -20,9 +20,22 @@ class FixtureStore:
                 and (node_ids is None or n["node_id"] in node_ids)]
 
     def graph_rows(self, repo_id, sha, roots):
-        # Supply the full edge set: reconstruction must itself enforce the bound
-        # and reject cycles, even if the database returns an unordered superset.
-        return [{"node_id": root, "reachable": list(reversed(self.snapshot.edges))} for root in roots]
+        # Mimic Atlas graphLookup depths, including the one-edge lookahead.
+        rows = []
+        for root in roots:
+            frontier = {root}
+            reachable, seen_edges = [], set()
+            for depth in range(3):
+                level = [edge for edge in self.snapshot.edges
+                         if edge["source_id"] in frontier and edge["_id"] not in seen_edges]
+                for edge in level:
+                    seen_edges.add(edge["_id"])
+                    reachable.append({**edge, "depth": depth})
+                frontier = {edge["target_id"] for edge in level}
+            # Reconstruction must handle unordered Atlas results and enforce
+            # the two-edge candidate bound independently of this lookahead.
+            rows.append({"node_id": root, "reachable": list(reversed(reachable))})
+        return rows
 
 
 def demo(git_repo):
@@ -31,8 +44,6 @@ def demo(git_repo):
         "pkg/pricing.py": "RATE = 2\n",
         "pkg/checkout.py": "from pkg.pricing import RATE\n",
         "tests/test_checkout.py": "import pkg.checkout\ndef test_checkout():\n    pass\n",
-        "pkg/third.py": "import pkg.checkout\n",
-        "tests/test_third.py": "import pkg.third\ndef test_third():\n    pass\n",
     })
     return repo, commit, base, FixtureStore(build_snapshot(repo, "demo", base))
 
@@ -49,6 +60,30 @@ def test_graph_returns_two_hop_test_with_ordered_path_evidence(git_repo):
     assert [(e["source_path"], e["target_path"]) for e in evidence["edges"]] == [
         ("pkg/pricing.py", "pkg/checkout.py"), ("pkg/checkout.py", "tests/test_checkout.py")]
     assert any(n["source_text"] == "RATE = 3\n" for n in result.changed_chunks)
+
+
+def test_graph_lookahead_requires_full_suite_when_path_exceeds_two_hops(git_repo):
+    repo, commit = git_repo
+    base = commit({
+        "pkg/core.py": "VALUE = 1\n",
+        "pkg/pricing.py": "from pkg.core import VALUE\n",
+        "pkg/checkout.py": "from pkg.pricing import VALUE\n",
+        "tests/test_checkout.py": "import pkg.checkout\ndef test_checkout():\n    pass\n",
+    })
+    store = FixtureStore(build_snapshot(repo, "demo", base))
+    head = commit({"pkg/core.py": "VALUE = 2\n"})
+
+    result = analyze_graph(repo, "demo", base, head, store)
+
+    assert result.requires_full_suite
+    assert "graph_truncated" in result.fallback_reasons
+    # The third edge signals uncertainty; it is not used to build graph paths.
+    assert "tests/test_checkout.py::test_checkout" not in {
+        candidate["test_id"] for candidate in result.candidates
+    }
+    assert all(len(reason["edges"]) <= 2
+               for candidate in result.candidates
+               for reason in candidate["reasons"] if reason["kind"] == "graph")
 
 
 def test_changed_tests_are_included_directly(git_repo):

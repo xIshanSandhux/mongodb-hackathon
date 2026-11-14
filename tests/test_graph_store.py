@@ -6,7 +6,7 @@ from impact_agent.graph_store import AtlasGraphStore
 from impact_agent.models import Snapshot
 
 
-def test_graph_query_is_snapshot_scoped_and_really_two_hops():
+def test_graph_query_is_snapshot_scoped_with_one_lookahead_hop():
     db = MagicMock()
     store = AtlasGraphStore(db)
     db.__getitem__.return_value.aggregate.return_value = iter([])
@@ -14,7 +14,7 @@ def test_graph_query_is_snapshot_scoped_and_really_two_hops():
     pipeline = db.__getitem__.return_value.aggregate.call_args.args[0]
     assert pipeline[0]["$match"] == {"repo_id": "demo", "base_sha": "base", "node_id": {"$in": ["root"]}, "node_type": "module"}
     lookup = pipeline[1]["$graphLookup"]
-    assert lookup["maxDepth"] == 1  # MongoDB starts depth at zero.
+    assert lookup["maxDepth"] == 2  # 0-1 are selected; 2 is a lookahead edge.
     assert lookup["connectFromField"] == "target_id"
     assert lookup["connectToField"] == "source_id"
     assert lookup["restrictSearchWithMatch"] == {"repo_id": "demo", "base_sha": "base", "kind": {"$in": ["imports", "tested_by"]}}

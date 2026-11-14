@@ -4,8 +4,8 @@
 
 - `gitrepo.py`: resolve commits, read blobs, list changed paths without checkout or code execution.
 - `indexer.py`: AST chunks; pytest IDs; absolute/relative/src imports; scoped conftest relationships.
-- `graph_store.py`: Atlas snapshot persistence/readiness and two-hop `$graphLookup`.
-- `graph.py`: changed context, affected tests, ordered evidence, and fallback signals.
+- `graph_store.py`: Atlas snapshot persistence/readiness and bounded `$graphLookup` with a one-edge lookahead.
+- `graph.py`: changed context, affected tests, ordered evidence, and fallback signals including `graph_truncated`.
 - `cli.py`: working `impact-agent index`; `analyze` remains Person 3's scaffold.
 
 `ARCH.md` defines the authoritative fields and interfaces. This is a conservative file-level import graph, not symbol-level call analysis.
@@ -91,6 +91,10 @@ python -m pytest tests/test_atlas_integration.py -q
 
 It writes a generated `graph-smoke-...` repo ID and cleans up only that ID. It checks actual persistence/traversal, repository isolation, and prior-run preservation. Without the URI it is skipped. It does not verify Person 1's vector search.
 
+## Graph cutoff behavior
+
+Focused graph candidates and their evidence use at most two edges (Atlas depths 0 and 1). The query fetches depth 2 only as a lookahead. If that third edge exists anywhere in the reachable result, `analyze_graph` adds `graph_truncated` to `fallback_reasons`; Person 3 must run the full suite whenever `impact.requires_full_suite` is true. This is intentionally conservative and can cause a full-suite run even when the additional edge does not lead to another test.
+
 ## Demo limits
 
-Use regular tracked Python files, root or `src/` packages, explicit imports, and standard pytest collection. Dynamic imports, custom discovery, inherited tests, plugins, monkeypatching, and unusual package roots are not modeled. Two-hop traversal is the agreed MVP bound; this is not proof of production regression recall.
+Use regular tracked Python files, root or `src/` packages, explicit imports, and standard pytest collection. Dynamic imports, custom discovery, inherited tests, plugins, monkeypatching, and unusual package roots are not modeled. Two-hop traversal is the agreed MVP candidate bound; deeper observed paths trigger full-suite fallback, but this is not proof of production regression recall.
