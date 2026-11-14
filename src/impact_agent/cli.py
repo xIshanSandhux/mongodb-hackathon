@@ -7,9 +7,9 @@ from pathlib import Path
 import typer
 from pymongo.errors import PyMongoError
 
-from .atlas import atlas_database, create_atlas_client, setup_atlas
+from .atlas import VECTOR_INDEX, atlas_database, create_atlas_client, setup_atlas
 from .gitrepo import GitError
-from .graph_store import AtlasGraphStore
+from .graph_store import AtlasGraphStore, graph_store_from_env
 from .indexer import IndexingError, build_snapshot
 from .agent import analyze_repository
 from .retrieval import AtlasRetrievalStore
@@ -62,8 +62,10 @@ def analyze(
                 graph_store = stack.enter_context(graph_store_from_env())
             except (PyMongoError, ValueError):
                 graph_store = None
-            retrieval = (AtlasRetrievalStore(graph_store.knowledge,
-                         os.environ.get("MONGODB_VECTOR_INDEX", "autoEmbed")) if graph_store is not None else None)
+            retrieval = (AtlasRetrievalStore(
+                graph_store.knowledge,
+                os.environ.get("MONGODB_VECTOR_INDEX", VECTOR_INDEX),
+            ) if graph_store is not None else None)
             report = analyze_repository(repo, repo_id, base, head, output, summary, graph_store, retrieval)
     except (ValueError, OSError):
         typer.echo("Analysis could not write its reports. Check distinct report paths, permissions, and repository files.", err=True)

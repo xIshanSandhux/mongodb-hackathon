@@ -3,12 +3,13 @@ from unittest.mock import MagicMock
 import pytest
 from pymongo.errors import OperationFailure
 
+from impact_agent.atlas import VECTOR_INDEX
 from impact_agent.retrieval import AtlasRetrievalStore
 
 
 def collection():
     c = MagicMock()
-    c.list_search_indexes.return_value = [{"name": "autoEmbed", "status": "READY", "queryable": True}]
+    c.list_search_indexes.return_value = [{"name": VECTOR_INDEX, "status": "READY", "queryable": True}]
     c.aggregate.return_value = []
     return c
 
@@ -20,7 +21,7 @@ def test_test_query_uses_text_object_and_exact_snapshot_filters():
     query = c.aggregate.call_args.args[0][0]["$vectorSearch"]
     assert query["query"] == {"text": "changed pricing"}
     assert query["filter"] == {"repo_id": "demo", "base_sha": "base", "kind": "test"}
-    assert query["limit"] == 3 and query["index"] == "autoEmbed"
+    assert query["limit"] == 3 and query["index"] == VECTOR_INDEX
 
 
 def test_memory_query_can_find_runs_from_older_base_snapshots():
@@ -31,7 +32,7 @@ def test_memory_query_can_find_runs_from_older_base_snapshots():
 
 
 def test_missing_or_building_index_is_an_error_not_empty_success():
-    for indexes in ([], [{"name": "autoEmbed", "status": "BUILDING", "queryable": False}]):
+    for indexes in ([], [{"name": VECTOR_INDEX, "status": "BUILDING", "queryable": False}]):
         c = collection()
         c.list_search_indexes.return_value = indexes
         with pytest.raises(OperationFailure):
