@@ -9,6 +9,7 @@ from pymongo.errors import PyMongoError
 from .gitrepo import changed_paths, read_python, resolve_commit, tree_files
 from .indexer import IndexingError, _chunks, _node, is_test_file, parse_python
 from .models import Document, GraphImpact
+from .service_graph import SERVICE_MAP_PATH
 
 
 class GraphStore(Protocol):
@@ -48,6 +49,8 @@ def analyze_graph(repo: Path, repo_id: str, base: str, head: str, store: GraphSt
     all_head_files = tree_files(repo, head_sha, regular_only=False)
     base_files = tree_files(repo, base_sha)
     python_paths = [p for p in result.changed_paths if p.endswith(".py")]
+    if SERVICE_MAP_PATH in python_paths:
+        result.fallback_reasons.append("service_metadata_changed")
     head_tests = {}
     for path in python_paths:
         if path not in head_files:

@@ -10,7 +10,7 @@ from pymongo import MongoClient
 from .indexer import stable_id
 from .models import Document, Snapshot
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 @contextmanager
@@ -54,7 +54,7 @@ class AtlasGraphStore:
                  "schema_version": SCHEMA_VERSION}
         if self.knowledge.find_one({**scope, "base_sha": sha}):
             return "ready"
-        return "stale" if self.knowledge.find_one(scope) else "missing"
+        return "stale" if self.knowledge.find_one({"repo_id": repo_id, "node_type": "snapshot", "complete": True}) else "missing"
 
     def nodes(self, repo_id: str, sha: str, *, paths=None, node_ids=None) -> list[Document]:
         query = {"repo_id": repo_id, "base_sha": sha,
@@ -78,6 +78,6 @@ class AtlasGraphStore:
                 # Depths 0 and 1 are the two selection hops. Depth 2 is a
                 # one-edge lookahead used only to detect a truncated graph.
                 "maxDepth": 2, "depthField": "depth",
-                "restrictSearchWithMatch": {**scope, "kind": {"$in": ["imports", "tested_by"]}},
+                "restrictSearchWithMatch": {**scope, "kind": {"$in": ["imports", "tested_by", "service_call"]}},
             }},
         ]))

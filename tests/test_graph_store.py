@@ -17,7 +17,7 @@ def test_graph_query_is_snapshot_scoped_with_one_lookahead_hop():
     assert lookup["maxDepth"] == 2  # 0-1 are selected; 2 is a lookahead edge.
     assert lookup["connectFromField"] == "target_id"
     assert lookup["connectToField"] == "source_id"
-    assert lookup["restrictSearchWithMatch"] == {"repo_id": "demo", "base_sha": "base", "kind": {"$in": ["imports", "tested_by"]}}
+    assert lookup["restrictSearchWithMatch"] == {"repo_id": "demo", "base_sha": "base", "kind": {"$in": ["imports", "tested_by", "service_call"]}}
 
 
 def test_snapshot_marker_is_last_and_prior_runs_are_not_deleted():

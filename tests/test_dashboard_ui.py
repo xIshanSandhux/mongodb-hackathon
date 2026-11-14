@@ -17,6 +17,7 @@ def test_dashboard_prepares_and_runs_demo_with_simple_default(monkeypatch, tmp_p
     app = AppTest.from_file(str(APP), default_timeout=30).run()
     assert not app.exception
     assert any("TestEcho" in item.value for item in app.markdown)
+    app.selectbox(key="demo_app").select("Small starter").run()
     app.button(key="prepare").click().run()
     assert not app.exception and app.session_state["configuration"]["repo_path"]
     assert app.session_state["current_step"] == "Knowledge"
@@ -50,6 +51,7 @@ def test_indexing_advances_to_run_and_configuration_survives_pages(monkeypatch, 
     calls = []
     monkeypatch.setattr(dashboard, "index_local", lambda *args: calls.append(args))
     app = AppTest.from_file(str(APP), default_timeout=30).run()
+    app.selectbox(key="demo_app").select("Small starter").run()
     app.button(key="prepare").click().run()
     config = app.session_state["configuration"].copy()
     app.button(key="index").click().run()

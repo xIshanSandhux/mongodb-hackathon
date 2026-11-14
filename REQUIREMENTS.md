@@ -35,6 +35,7 @@ For a pull request in one Python demo repository, produce an explainable regress
 - Gemini may receive bounded report evidence, relevant committed Python snippets, and failure logs, with known credentials redacted. It cannot select tests, change results, or claim hidden internal reasoning. Display recorded evidence separately as authoritative.
 - Missing credentials, API failures, or invalid generated output use template explanations and preserve results. UI reruns/style toggles must not rerun tests or call Gemini again.
 - Keep API credentials in environment variables or ignored `.env`; no credential input fields or committed keys. `GEMINI_API_KEY`/`GOOGLE_API_KEY` are excluded from pytest subprocess environments.
+- PayFlow (`ash-raf-codes/payment_processing_app`) is the primary prepared demo, pinned to an immutable upstream snapshot with separate local Git clones. Distinguish generated gateway refactor/regression commits from the historical vendor PR replay. Run the actual upstream pytest suite. Ingest its explicit static service registry as explainable `service_call` edges; malformed/dynamic registry metadata must not publish an incomplete index. Snapshot schema version 2 requires reindexing old snapshots. Registry-file changes trigger full-suite fallback. CLI flags and common Atlas fields remain stable.
 
 ## Four-person ticket breakdown
 

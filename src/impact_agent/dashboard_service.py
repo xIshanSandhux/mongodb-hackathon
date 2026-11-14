@@ -20,6 +20,8 @@ class Demo:
     repo_id: str
     base: str
     head: str
+    source_url: str | None = None
+    generated_change: bool = True
 
 
 def prepare_demo(scenario: str, *, parent: Path | None = None) -> Demo:
