@@ -43,7 +43,7 @@ impact-agent index --repo <path> --repo-id <id> --commit <sha>
 impact-agent analyze --repo <path> --repo-id <id> --base <sha> --head <sha> --output <json-path> --summary <markdown-path>
 ```
 
-- `index` scans the Python demo repository at the specified commit, extracts source and pytest test chunks, derives import and test relationships, and writes a versioned snapshot to Atlas.
+- `index` ensures the Atlas collections and `knowledge_vector` index exist, then scans the Python demo repository at the specified commit, extracts source and pytest test chunks, derives import and test relationships, and writes a versioned snapshot through the same database connection.
 - `analyze` reads the base/head diff, looks up graph and semantic candidates, reads similar prior-run memories, runs the selected tests or the full suite, stores the outcome, and writes both a JSON report and a Markdown summary, including when tests fail.
 - The report includes base and head SHAs, changed paths, chosen tests, selection reasons and evidence, test outcomes, elapsed time, whether fallback ran, and the fallback reason when present.
 - The CLI exits successfully when the executed test command passes and with a nonzero status when it fails. This lets the Action publish the report and reflect the test result.
@@ -61,14 +61,42 @@ Create a Vector Search `autoEmbed` index on `knowledge.search_text` with model `
 
 1. Compute changed paths between the requested base and head commits.
 2. Include changed pytest files directly.
-3. Resolve changed Python modules to indexed node IDs and traverse `edges` with `$graphLookup`, bounded to two hops, to find dependent modules and tests.
+3. Resolve changed Python modules to indexed node IDs and traverse `edges` with `$graphLookup`, selecting at most two hops and using one additional lookahead edge to detect when full-suite fallback is needed.
 4. For each changed code chunk, run a filtered Vector Search over test documents and add up to three highest-ranked test candidates. Query prior-run documents separately and add tests that failed on a semantically similar earlier change.
 5. Deduplicate test IDs and retain a reason for each selection: changed test, graph path, semantic match, or prior regression.
 6. Run the selected tests with pytest and store the report as a prior-run document for future analysis.
 
-Run the full pytest suite when the base snapshot is missing or stale, a changed Python file cannot be parsed or matched to the index, Atlas graph/vector retrieval fails, or analysis produces no defensible test candidates. The report must identify the trigger. Do not silently present a fallback run as a focused selection.
+Run the full pytest suite when the base snapshot is missing or stale, a changed Python file cannot be parsed or matched to the index, Atlas graph/vector retrieval fails, graph traversal reaches beyond its two-edge selection bound, or analysis produces no defensible test candidates. The report must identify the trigger. Do not silently present a fallback run as a focused selection.
 
-## GitHub Actions output
+## Implemented graph contract (GRAPH-1 / GRAPH-2)
+
+The CLI flags above are unchanged. `index` is implemented; the `analyze` CLI remains owned by Person 3. Graph analysis is available through `analyze_graph(repo_path, repo_id, base_sha, head_sha, store)` in `impact_agent.graph`. Pass an `AtlasGraphStore(database)` or use the environment-backed context manager in `graph_store.py`.
+
+### Node and edge identity
+
+Every source/test node has stable `node_id` (SHA-256 of a JSON array of repo ID, path, qualified symbol), and snapshot-scoped `_id` (hash incorporating the commit SHA). Edge endpoints reference **node_id**, not `_id`. Common fields above remain unchanged. Module nodes use `kind=code`, `node_type=module`, `symbol=<module>`. Function/class/method chunks use `node_type=symbol`. Test function/method chunks use `kind=test` and carry executable `pytest_id`, e.g. `tests/test_cart.py::TestCart::test_total`. All include `source_text` and `search_text`; symbol nodes include line ranges with decorators. Edges add `source_path`/`target_path` for explanations.
+
+A completion marker in `knowledge` uses existing `kind=code`, `node_type=snapshot`, `symbol=<snapshot>`, `path=""`, `complete=true`, `schema_version=1`, and node/edge counts. Exclude this marker from code vector retrieval, e.g. `kind=code` and `path != ""`. Test retrieval still filters `kind=test`. Snapshot readiness requires this marker at the exact base SHA.
+
+Indexing reads regular tracked Python blobs from the specified Git tree, never working-directory edits. All files are parsed before writes. Python symlinks and ambiguous root/src module names are rejected. An old completion marker is removed before replacing that snapshot's code/test nodes and edges; a new marker is published last. Reindexing preserves `pr_run` records and other repo/commit data. Index/analyze operations for the same repo/snapshot **must be serialized**; concurrent reindex is outside the MVP contract.
+
+### Dependency behavior
+
+The graph conservatively tracks files. Imports point from the dependency module to an importing module (`imports`) and directly to tests defined in the importing file (`tested_by`). Absolute/relative imports, root and `src/` packages, package initializers, and function-local imports are recognized. Each `conftest.py` points to all tests below its directory, covering implicit pytest fixture/config dependencies. Source symbols remain searchable chunks; this is not a static call graph.
+
+Use ordinary pytest naming/collection in the demo. Custom collection, inherited tests, dynamic imports/plugins, runtime monkeypatching, and arbitrary package roots are not resolved. Conditional imports are conservatively included. Parameterized test IDs omit case suffixes, selecting all cases of a function.
+
+`$graphLookup` starts from changed module `node_id`s and traverses `edges` from `source_id` to `target_id`, filtered by repo, exact base SHA, and edge kind. Candidate selection and ordered evidence are limited to two edges (depths 0 and 1). Atlas fetches depth 2 as a one-edge lookahead; if that third edge exists, `graph_truncated` triggers full-suite fallback. The lookahead edge is never used to claim a focused candidate path. Ordered evidence is reconstructed from unordered results, excluding cycles and enforcing the two-edge selection bound. See [MongoDB's reference](https://www.mongodb.com/docs/manual/reference/operator/aggregation/graphlookup/).
+
+### Person 3 return contract
+
+`GraphImpact` contains canonical `base_sha`/`head_sha`, sorted `changed_paths`, `changed_chunks` (head module context plus symbols; base context for deletions), `affected_nodes`, `candidates`, and `fallback_reasons`. Each candidate has `test_id` (pytest node ID), stable `node_id`, `path`, and `reasons`. A graph reason contains `kind=graph`, `changed_path`, and ordered `edges`. A direct reason contains `kind=changed_test` and `changed_path`. Deduplication retains distinct explanations. Changed tests are taken from head; removed tests are not selected.
+
+`requires_full_suite` is true if `fallback_reasons` is nonempty. Reasons include `missing_base_snapshot`, `stale_base_snapshot`, `cannot_parse_python: <path>`, `unmapped_python: <path>`, `unsupported_python: <path>`, `atlas_retrieval_failed`, and `graph_truncated`. The graph cutoff signal is conservative: any third edge observed by the lookahead triggers fallback. Added/renamed Python paths conservatively trigger unmapped fallback; deleted modules trace their base graph. Database diagnostics are sanitized. Invalid Git inputs raise `GitError` and must fail analysis. The test runner must ensure its checkout matches head before executing tests.
+
+Empty graph candidates alone do not force fallback: Person 3 still tries vector and prior-run retrieval. Their final selector must run the full suite if no defensible candidates remain or retrieval fails. Execution, run persistence, and final reporting remain AGENT-1/AGENT-2. See `docs/GRAPH-HANDOFF.md` for examples.
+
+## GitHub Actions output (integration)
 
 The Action in the demo repository runs `impact-agent analyze` for PRs and supports manual dispatch. It captures the CLI step's exit status, then uses an `if: always()` step to append the Markdown summary to `$GITHUB_STEP_SUMMARY` and upload the JSON report. A final status step fails the workflow when the CLI reported failing tests. This preserves the explanation while keeping the check result accurate. The initial version does not post PR comments or require write access to the PR.
 
