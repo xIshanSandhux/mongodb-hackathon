@@ -63,13 +63,15 @@ The package installs an `impact-agent` command. Check its available commands wit
 impact-agent --help
 ```
 
-`index` writes committed Python modules, symbols, pytest tests, edges, and a completion marker to Atlas:
+`index` creates the `knowledge` and `edges` collections and the `knowledge_vector` index if needed, then writes committed Python modules, symbols, pytest tests, edges, and a completion marker to Atlas:
 
 ```sh
 impact-agent index --repo /path/to/demo-repo --repo-id demo-python --commit <base-sha>
 ```
 
 `analyze` still exits with an implementation-pending message; Person 3 owns its integration. GRAPH-2 is available as `impact_agent.graph.analyze_graph`. See [the graph handoff](docs/GRAPH-HANDOFF.md) for usage and tests. Person 1 still owns vector index creation/search.
+
+To run Person 1's live Atlas vector and prior-run smoke check separately, configure `MONGODB_URI` and run `python -m impact_agent.atlas`. The `index` command bootstraps the collections and vector index, but does not run this smoke check.
 
 ## Project layout
 
