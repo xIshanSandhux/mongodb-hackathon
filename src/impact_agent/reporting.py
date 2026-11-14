@@ -47,6 +47,10 @@ def write_reports(report: Document, output: Path, summary: Path) -> None:
     lines += ["", "## Outcomes", "", "| Test | Outcome | Seconds |", "| --- | --- | --- |"]
     for outcome in report["test_outcomes"]:
         lines.append(f"| {_cell(outcome['test_id'])} | {_cell(outcome['outcome'])} | {outcome['duration_seconds']:.3f} |")
+    if audit := report.get("missed_test_audit"):
+        lines += ["", "## Missed-test audit", "", f"Status: **{audit['status']}**."]
+        for miss in audit["missed_failures"]:
+            lines.append(f"- {_cell(miss['test_id'])} failed outside the focused plan.")
     lines += ["", f"Run memory: **{_cell(report['persistence']['status'])}**."]
     if report["persistence"].get("warning"):
         lines.append(_cell(report["persistence"]["warning"]))

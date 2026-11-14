@@ -54,6 +54,7 @@ def analyze(
     head: str = typer.Option(..., help="Head commit SHA for the pull request."),
     output: Path = typer.Option(Path("impact-report.json"), help="Path for the JSON report."),
     summary: Path = typer.Option(Path("impact-summary.md"), help="Path for the Markdown summary."),
+    audit_missed_tests: bool = typer.Option(False, "--audit-missed-tests", help="Audit passing focused runs with full pytest."),
 ) -> None:
     """Select regression tests, run pytest, remember outcomes, and write reports."""
     try:

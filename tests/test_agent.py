@@ -157,3 +157,49 @@ def test_runtime_deselection_cannot_hide_a_planned_test(git_repo, tmp_path):
                                 FixtureStore(build_snapshot(repo, "demo", base)), Memory())
     assert report["exit_code"] != 0
     assert "pytest_selection_mismatch" in report["execution_errors"]
+
+
+def test_audit_records_missed_failure_and_later_plan_recalls_it(git_repo, tmp_path_factory, monkeypatch):
+    repo, commit = git_repo
+    base = commit({
+        "app.py": "VALUE = 1\n",
+        "test_app.py": "import app\ndef test_app():\n    assert app.VALUE > 0\n",
+        ".gitignore": "__pycache__/\n",
+        "test_payment.py": "def test_duplicate_charge():\n    assert __import__('app').VALUE == 1\n",
+    })
+    head = commit({"app.py": "VALUE = 2\n"})
+
+    from impact_agent.models import GraphImpact
+
+    def focused_graph(repo, repo_id, base, head, store):
+        return GraphImpact(repo_id, base, head, changed_paths=["app.py"], candidates=[
+            {"test_id": "test_app.py::test_app", "path": "test_app.py",
+             "reasons": [{"kind": "changed_test", "changed_path": "app.py"}]},
+        ])
+
+    monkeypatch.setattr("impact_agent.agent.analyze_graph", focused_graph)
+
+    class RecallingMemory(Memory):
+        def search_runs(self, repo_id, text, limit=3):
+            return [{**run, "score": 0.9} for run in self.saved][-limit:]
+
+    memory = RecallingMemory()
+    output, summary = files(tmp_path_factory.mktemp("audit-reports"))
+    first = analyze_repository(
+        repo, "demo", base, head, output, summary,
+        FixtureStore(build_snapshot(repo, "demo", base)), memory, audit_missed_tests=True,
+    )
+    missed_id = "test_payment.py::test_duplicate_charge"
+    assert first["exit_code"] == 1
+    assert [case["test_id"] for case in first["missed_test_audit"]["missed_failures"]] == [missed_id]
+    assert missed_id in summary.read_text(encoding="utf-8")
+    next_head = commit({"app.py": "VALUE = 3\n"})
+    output, summary = files(tmp_path_factory.mktemp("recall-reports"))
+    second = analyze_repository(
+        repo, "demo", head, next_head, output, summary,
+        FixtureStore(build_snapshot(repo, "demo", head)), memory,
+    )
+    assert not second["fallback"]["ran"]
+    assert second["exit_code"] == 1
+    candidate = next(test for test in second["selected_tests"] if test["test_id"] == missed_id)
+    assert any(reason["kind"] == "prior_regression" for reason in candidate["reasons"])
