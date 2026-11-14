@@ -75,7 +75,9 @@ class AtlasGraphStore:
                 "from": self.edges.name,
                 "startWith": "$node_id", "connectFromField": "target_id",
                 "connectToField": "source_id", "as": "reachable",
-                "maxDepth": 1, "depthField": "depth",
+                # Depths 0 and 1 are the two selection hops. Depth 2 is a
+                # one-edge lookahead used only to detect a truncated graph.
+                "maxDepth": 2, "depthField": "depth",
                 "restrictSearchWithMatch": {**scope, "kind": {"$in": ["imports", "tested_by"]}},
             }},
         ]))

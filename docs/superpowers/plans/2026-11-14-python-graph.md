@@ -2,20 +2,20 @@
 
 **Goal:** Deliver GRAPH-1 and GRAPH-2 against PROBLEM.md, REQUIREMENTS.md, and ARCH.md.
 
-**Architecture:** Read immutable Git trees, parse with Python AST, and persist snapshot-scoped nodes/edges in Atlas. Traverse dependency-to-dependent edges with two-hop `$graphLookup`; reconstruct ordered evidence locally. Expose results to Person 3 rather than implementing their selector/runner.
+**Architecture:** Read immutable Git trees, parse with Python AST, and persist snapshot-scoped nodes/edges in Atlas. Select through at most two dependency-to-dependent edges with `$graphLookup`, using one additional lookahead edge to signal truncation; reconstruct ordered evidence locally. Expose results to Person 3 rather than implementing their selector/runner.
 
 **Constraints:** Python/pytest only; existing CLI flags and collection fields stay intact. No external writes except explicitly invoked indexing. No push or PR. Use the current checkout on a local feature branch.
 
 ## Tasks
 
 - [x] 1. Write failing real-Git fixtures for commit-specific indexing, source/test extraction, relative/src imports, decorated methods, and malformed files. Implement `build_snapshot(repo, repo_id, commit)` in `indexer.py`, Git helpers in `gitrepo.py`, and typed results in `models.py`.
-- [x] 2. Write failing graph tests for snapshot persistence, two-hop paths, cycles, changed/deleted/new files, stale/missing snapshots, and retrieval errors. Implement `AtlasGraphStore` in `graph_store.py` and `analyze_graph(repo, repo_id, base, head, store)`. Actual repository-isolation query execution is in the opt-in database test.
+- [x] 2. Write graph tests for snapshot persistence, two-hop paths, over-limit lookahead, cycles, changed/deleted/new files, stale/missing snapshots, and retrieval errors. Implement `AtlasGraphStore` in `graph_store.py` and `analyze_graph(repo, repo_id, base, head, store)`. Actual repository-isolation query execution is in the opt-in database test.
 - [x] 3. Write CLI tests, wire `index` to Atlas using environment credentials, and preserve `analyze` for Person 3. Document exact fields/interfaces and limitations in ARCH.md, REQUIREMENTS.md, and a teammate handoff.
 - [x] 4. Run full pytest, package/CLI smoke checks, and diff checks. Report actual live-Atlas limitations.
 
 ## Review focus
 
-Test immutable commit reads despite dirty checkout; failed indexing must not mark a snapshot complete; preserve prior-run documents on reindex; two hops must not become three through zero-based depth; incomplete mappings and Atlas errors must signal fallback.
+Test immutable commit reads despite dirty checkout; failed indexing must not mark a snapshot complete; preserve prior-run documents on reindex; candidate evidence must stay at two hops while a third-edge lookahead signals fallback; incomplete mappings and Atlas errors must signal fallback.
 
 ## Decisions
 

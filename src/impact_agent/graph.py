@@ -106,11 +106,19 @@ def analyze_graph(repo: Path, repo_id: str, base: str, head: str, store: GraphSt
                         result.fallback_reasons.append(reason)
             result.changed_chunks.extend(n for n in nodes if n["path"] not in head_files)
             paths = []
+            graph_truncated = False
             for row in store.graph_rows(repo_id, base_sha, sorted(roots)):
                 root = row["node_id"]
-                for target, evidence in _paths(root, row["reachable"]):
+                reachable = row["reachable"]
+                # Atlas returns depth 2 as the third edge. It is a lookahead:
+                # candidates and explanations still use at most two edges.
+                if any(edge.get("depth", -1) >= 2 for edge in reachable):
+                    graph_truncated = True
+                for target, evidence in _paths(root, reachable):
                     paths.append((target, {"kind": "graph", "changed_path": roots[root]["path"],
                                            "edges": evidence}))
+            if graph_truncated:
+                result.fallback_reasons.append("graph_truncated")
             affected = store.nodes(repo_id, base_sha, node_ids=sorted({target for target, _ in paths}))
             result.affected_nodes = sorted(affected, key=lambda n: n["node_id"])
             lookup = {n["node_id"]: n for n in affected}

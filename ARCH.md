@@ -61,12 +61,12 @@ Create a Vector Search `autoEmbed` index on `knowledge.search_text` with model `
 
 1. Compute changed paths between the requested base and head commits.
 2. Include changed pytest files directly.
-3. Resolve changed Python modules to indexed node IDs and traverse `edges` with `$graphLookup`, bounded to two hops, to find dependent modules and tests.
+3. Resolve changed Python modules to indexed node IDs and traverse `edges` with `$graphLookup`, selecting at most two hops and using one additional lookahead edge to detect when full-suite fallback is needed.
 4. For each changed code chunk, run a filtered Vector Search over test documents and add up to three highest-ranked test candidates. Query prior-run documents separately and add tests that failed on a semantically similar earlier change.
 5. Deduplicate test IDs and retain a reason for each selection: changed test, graph path, semantic match, or prior regression.
 6. Run the selected tests with pytest and store the report as a prior-run document for future analysis.
 
-Run the full pytest suite when the base snapshot is missing or stale, a changed Python file cannot be parsed or matched to the index, Atlas graph/vector retrieval fails, or analysis produces no defensible test candidates. The report must identify the trigger. Do not silently present a fallback run as a focused selection.
+Run the full pytest suite when the base snapshot is missing or stale, a changed Python file cannot be parsed or matched to the index, Atlas graph/vector retrieval fails, graph traversal reaches beyond its two-edge selection bound, or analysis produces no defensible test candidates. The report must identify the trigger. Do not silently present a fallback run as a focused selection.
 
 ## Implemented graph contract (GRAPH-1 / GRAPH-2)
 
@@ -86,13 +86,13 @@ The graph conservatively tracks files. Imports point from the dependency module 
 
 Use ordinary pytest naming/collection in the demo. Custom collection, inherited tests, dynamic imports/plugins, runtime monkeypatching, and arbitrary package roots are not resolved. Conditional imports are conservatively included. Parameterized test IDs omit case suffixes, selecting all cases of a function.
 
-`$graphLookup` starts from changed module `node_id`s and traverses `edges` from `source_id` to `target_id`, filtered by repo, exact base SHA, and edge kind. `maxDepth=1` means **two edges**, since MongoDB starts depth at zero. Ordered evidence is reconstructed from unordered results, excluding cycles and enforcing the same bound. See [MongoDB's reference](https://www.mongodb.com/docs/manual/reference/operator/aggregation/graphlookup/).
+`$graphLookup` starts from changed module `node_id`s and traverses `edges` from `source_id` to `target_id`, filtered by repo, exact base SHA, and edge kind. Candidate selection and ordered evidence are limited to two edges (depths 0 and 1). Atlas fetches depth 2 as a one-edge lookahead; if that third edge exists, `graph_truncated` triggers full-suite fallback. The lookahead edge is never used to claim a focused candidate path. Ordered evidence is reconstructed from unordered results, excluding cycles and enforcing the two-edge selection bound. See [MongoDB's reference](https://www.mongodb.com/docs/manual/reference/operator/aggregation/graphlookup/).
 
 ### Person 3 return contract
 
 `GraphImpact` contains canonical `base_sha`/`head_sha`, sorted `changed_paths`, `changed_chunks` (head module context plus symbols; base context for deletions), `affected_nodes`, `candidates`, and `fallback_reasons`. Each candidate has `test_id` (pytest node ID), stable `node_id`, `path`, and `reasons`. A graph reason contains `kind=graph`, `changed_path`, and ordered `edges`. A direct reason contains `kind=changed_test` and `changed_path`. Deduplication retains distinct explanations. Changed tests are taken from head; removed tests are not selected.
 
-`requires_full_suite` is true if `fallback_reasons` is nonempty. Reasons include `missing_base_snapshot`, `stale_base_snapshot`, `cannot_parse_python: <path>`, `unmapped_python: <path>`, `unsupported_python: <path>`, and `atlas_retrieval_failed`. Added/renamed Python paths conservatively trigger unmapped fallback; deleted modules trace their base graph. Database diagnostics are sanitized. Invalid Git inputs raise `GitError` and must fail analysis. The test runner must ensure its checkout matches head before executing tests.
+`requires_full_suite` is true if `fallback_reasons` is nonempty. Reasons include `missing_base_snapshot`, `stale_base_snapshot`, `cannot_parse_python: <path>`, `unmapped_python: <path>`, `unsupported_python: <path>`, `atlas_retrieval_failed`, and `graph_truncated`. The graph cutoff signal is conservative: any third edge observed by the lookahead triggers fallback. Added/renamed Python paths conservatively trigger unmapped fallback; deleted modules trace their base graph. Database diagnostics are sanitized. Invalid Git inputs raise `GitError` and must fail analysis. The test runner must ensure its checkout matches head before executing tests.
 
 Empty graph candidates alone do not force fallback: Person 3 still tries vector and prior-run retrieval. Their final selector must run the full suite if no defensible candidates remain or retrieval fails. Execution, run persistence, and final reporting remain AGENT-1/AGENT-2. See `docs/GRAPH-HANDOFF.md` for examples.
 
