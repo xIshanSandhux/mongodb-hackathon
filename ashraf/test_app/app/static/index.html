@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f6f8">
+  <title>PayFlow | Payments</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/"><span class="brand-mark">P</span><span>payflow</span></a>
+    <p class="nav-label">WORKSPACE</p>
+    <a class="nav-item active" href="#payments"><span>▦</span> Payments</a>
+    <a class="nav-item muted" href="#payments"><span>◷</span> Customers</a>
+    <a class="nav-item muted" href="#payments"><span>▤</span> Reports</a>
+    <div class="sidebar-bottom"><span class="avatar">AC</span><span><b>Acme Store</b><small>Demo workspace</small></span><span class="dots">•••</span></div>
+  </aside>
+
+  <main class="main" id="payments">
+    <header class="topbar"><div class="breadcrumb">Payments <span>/</span> Overview</div><div class="top-right"><span class="live-dot"></span> Sandbox mode <span class="avatar small">AC</span></div></header>
+    <section class="page-heading"><div><p class="eyebrow">PAYMENTS</p><h1>Overview</h1><p class="subtitle">Monitor and manage your transactions.</p></div><button class="primary" id="open-modal"><span>＋</span> Create payment</button></section>
+
+    <section class="stats">
+      <article class="stat-card"><div class="stat-top">Successful volume <span class="stat-icon green">↗</span></div><strong id="volume">$0.00</strong><small><span class="positive">●</span> Captured payments</small></article>
+      <article class="stat-card"><div class="stat-top">Transactions <span class="stat-icon blue">▤</span></div><strong id="transaction-count">0</strong><small>All payment attempts</small></article>
+      <article class="stat-card"><div class="stat-top">Successful <span class="stat-icon green">✓</span></div><strong id="success-count">0</strong><small>Ready to be refunded</small></article>
+      <article class="stat-card"><div class="stat-top">Needs attention <span class="stat-icon orange">!</span></div><strong id="attention-count">0</strong><small>Processing or failed</small></article>
+    </section>
+
+    <section class="panel"><div class="panel-heading"><div><h2>Recent payments</h2><p>A live view of your latest payment activity.</p></div><label class="filter-wrap"><span>☷</span><select id="status-filter" aria-label="Filter by status"><option value="">All statuses</option><option value="succeeded">Succeeded</option><option value="processing">Processing</option><option value="failed">Failed</option><option value="refunded">Refunded</option></select></label></div>
+      <div class="table-wrap"><table><thead><tr><th>PAYMENT</th><th>CUSTOMER</th><th>DATE</th><th>AMOUNT</th><th>STATUS</th><th></th></tr></thead><tbody id="payment-rows"><tr><td colspan="6" class="loading">Loading payments…</td></tr></tbody></table></div>
+      <div class="panel-foot"><span id="result-count">Loading…</span><span>Showing latest activity</span></div>
+    </section>
+    <footer>PayFlow Demo <span>•</span> Fictional transactions for testing only</footer>
+  </main>
+
+  <dialog id="payment-modal"><form id="payment-form"><div class="modal-head"><div><p class="eyebrow">NEW TRANSACTION</p><h2>Create payment</h2></div><button type="button" class="close" id="close-modal" aria-label="Close">×</button></div>
+    <p class="form-intro">Create a simulated payment. No real card is charged.</p>
+    <label>Order ID<input name="order_id" required minlength="3" placeholder="ord_1050"></label>
+    <div class="form-row"><label>Customer name<input name="customer_name" required minlength="2" maxlength="100" placeholder="Jordan Lee"></label><label>Email address<input name="customer_email" type="email" required placeholder="jordan@example.test"></label></div>
+    <div class="form-row"><label>Vendor<select name="vendor" required><option>Northstar Goods</option><option>Morrow Home</option><option>Juniper Supply</option><option>Acme Store</option></select></label><label>Customer phone <span class="optional">(optional)</span><input name="customer_phone" type="tel" placeholder="+1 416 555 0123"></label></div>
+    <div class="form-row"><label>Amount<input name="amount" type="number" min="0.01" step="0.01" required placeholder="49.00"></label><label>Currency<select name="currency"><option>USD</option><option>CAD</option><option>EUR</option></select></label></div>
+    <label>Description <span class="optional">(optional)</span><input name="description" maxlength="240" placeholder="Order payment"></label>
+    <label>Test card number <span class="optional">(optional)</span><input name="card_number" inputmode="numeric" autocomplete="off" placeholder="4242 4242 4242 4242"></label>
+    <div class="form-row"><label>Expiry month<input name="card_exp_month" type="number" min="1" max="12" placeholder="MM"></label><label>Expiry year<input name="card_exp_year" type="number" min="2026" max="2045" placeholder="YYYY"></label><label>Security code<input name="card_cvc" type="password" inputmode="numeric" minlength="3" maxlength="4" placeholder="CVC"></label></div>
+    <p class="hint">Use a Luhn-valid test card. A number ending in 0002 simulates a decline. Full card data is discarded.</p>
+    <p class="form-error" id="form-error"></p><div class="modal-actions"><button type="button" class="secondary" id="cancel-modal">Cancel</button><button class="primary" type="submit" id="submit-payment">Create payment</button></div>
+  </form></dialog>
+  <div id="toast" role="status" class="toast"></div>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

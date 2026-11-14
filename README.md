@@ -85,3 +85,13 @@ AGENTS.md           Instructions for Codex
 ```
 
 The GitHub Actions workflow and sample Python application belong in a separate demo repository, as described in `ARCH.md`.
+
+## How the pieces fit together
+
+This project has three distinct parts:
+
+- **Payments demo app** (`ashraf/test_app/`): a small FastAPI backend and browser dashboard that simulate payments, vendors, customers, captures, and refunds. It provides the application code and behavior used as the example system.
+- **PR Impact Agent** (this repository): analyzes a pull request's code changes, selects relevant regression tests, runs them, and explains why each test was selected.
+- **GitHub Actions** (the CI platform): starts workflows in response to repository events, runs scripts or actions on a runner, and reports the workflow result. In the planned setup, it triggers the PR Impact Agent and publishes the agent's report as a CI check.
+
+GitHub Actions provides workflow automation; the PR Impact Agent provides the test-selection logic. The payments demo is the sample application the agent analyzes. The intended flow is: a pull request changes the payments app, GitHub Actions invokes the agent, and the agent selects and runs relevant tests and returns an explanation. See [GitHub's workflow overview](https://docs.github.com/en/actions/concepts/workflows-and-actions/workflows) for more about workflow triggers, jobs, and steps.
