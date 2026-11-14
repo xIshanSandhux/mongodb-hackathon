@@ -7,8 +7,9 @@ from pathlib import Path
 import typer
 from pymongo.errors import PyMongoError
 
+from .atlas import atlas_database, create_atlas_client, setup_atlas
 from .gitrepo import GitError
-from .graph_store import graph_store_from_env
+from .graph_store import AtlasGraphStore
 from .indexer import IndexingError, build_snapshot
 from .agent import analyze_repository
 from .retrieval import AtlasRetrievalStore
@@ -25,11 +26,13 @@ def index(
     repo_id: str = typer.Option(..., help="Stable identifier for this repository in Atlas."),
     commit: str = typer.Option(..., help="Git commit SHA represented by the index."),
 ) -> None:
-    """Index committed Python source, pytest tests, and dependency edges into Atlas."""
+    """Set up Atlas and index committed Python source, tests, and graph edges."""
     try:
         snapshot = build_snapshot(repo, repo_id, commit)
-        with graph_store_from_env() as store:
-            store.save_snapshot(snapshot)
+        with create_atlas_client() as client:
+            database = atlas_database(client)
+            setup_atlas(database)
+            AtlasGraphStore(database).save_snapshot(snapshot)
     except (GitError, IndexingError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from None
