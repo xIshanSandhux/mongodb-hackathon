@@ -71,6 +71,8 @@ def test_index_requires_environment_credentials(git_repo, monkeypatch, tmp_path)
     repo, commit = git_repo
     sha = commit({"app.py": "VALUE = 1\n"})
     monkeypatch.delenv("MONGODB_URI", raising=False)
+    # The Atlas helper searches for a project .env; do not read a developer's real credentials.
+    monkeypatch.setattr("impact_agent.atlas.load_dotenv", lambda: False)
     monkeypatch.chdir(tmp_path)
     result = CliRunner().invoke(cli.app, ["index", "--repo", str(repo), "--repo-id", "demo", "--commit", sha])
     assert result.exit_code == 2
@@ -104,3 +106,22 @@ def test_analyze_test_failure_is_a_failing_cli_status(git_repo, monkeypatch, tmp
         "--base", base, "--head", head, "--output", str(output), "--summary", str(summary)])
     assert result.exit_code == 1
     assert json.loads(output.read_text())["test_status"] == "failed" and summary.exists()
+
+
+def test_analyze_invokes_agent_once(monkeypatch):
+    calls = []
+
+    @contextmanager
+    def unavailable():
+        raise ValueError("no credentials")
+        yield
+
+    def analyze_once(*args, **kwargs):
+        calls.append(args)
+        return {"test_status": "passed", "selected_test_count": 1, "fallback": {"ran": True},
+                "persistence": {"status": "saved"}, "exit_code": 0}
+
+    monkeypatch.setattr(cli, "graph_store_from_env", unavailable)
+    monkeypatch.setattr(cli, "analyze_repository", analyze_once)
+    result = CliRunner().invoke(cli.app, ["analyze", "--repo-id", "demo", "--base", "base", "--head", "head"])
+    assert result.exit_code == 0 and len(calls) == 1

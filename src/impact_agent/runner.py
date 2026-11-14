@@ -50,7 +50,7 @@ def _execute(repo: Path, test_ids: list[str] | None, *, collect: bool, timeout: 
         if test_ids:
             command.extend(["--", *test_ids])
         env = os.environ.copy()
-        for name in ("MONGODB_URI", "MONGODB_TEST_URI", "PYTEST_ADDOPTS"):
+        for name in ("MONGODB_URI", "MONGODB_TEST_URI", "GEMINI_API_KEY", "GOOGLE_API_KEY", "PYTEST_ADDOPTS"):
             env.pop(name, None)
         with subprocess.Popen(command, cwd=repo, env=env, stdout=subprocess.PIPE,
                               stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace",

@@ -32,7 +32,7 @@ def write_reports(report: Document, output: Path, summary: Path) -> None:
     for path in (output, summary):
         path.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
-    lines = ["# PR Impact Agent", "", f"**Test result:** {_cell(report['test_status'])} (exit {report['exit_code']})",
+    lines = ["# TestEcho", "", f"**Test result:** {_cell(report['test_status'])} (exit {report['exit_code']})",
              "", f"Base: `{_cell(report['base_sha'])}`  ", f"Head: `{_cell(report['head_sha'])}`", "",
              f"Changed paths: {_cell(', '.join(report['changed_paths']) or '(none)')}", "",
              f"Full-suite fallback: **{'yes' if report['fallback']['ran'] else 'no'}**"]

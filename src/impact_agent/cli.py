@@ -63,10 +63,6 @@ def analyze(
                 graph_store = stack.enter_context(graph_store_from_env())
             except (PyMongoError, ValueError):
                 graph_store = None
-            retrieval = (AtlasRetrievalStore(graph_store.knowledge,
-                         os.environ.get("MONGODB_VECTOR_INDEX", VECTOR_INDEX)) if graph_store is not None else None)
-            report = analyze_repository(repo, repo_id, base, head, output, summary, graph_store, retrieval,
-                                        audit_missed_tests=audit_missed_tests)
             retrieval = (AtlasRetrievalStore(
                 graph_store.knowledge,
                 os.environ.get("MONGODB_VECTOR_INDEX", VECTOR_INDEX),
